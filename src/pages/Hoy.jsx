@@ -6,16 +6,11 @@ const Hoy = () => {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
 
-  // --- CONFIGURACIÓN DINÁMICA DE LA URL DE LA API ---
-  const API_URL = window.location.hostname === 'localhost' 
-    ? 'http://localhost:8080' 
-    : 'https://planificador-eventos-backend.onrender.com';
-
   useEffect(() => {
     const obtenerEventosYGestiones = async () => {
       try {
         setCargando(true);
-        const response = await fetch(`${API_URL}/api/eventos/`);
+        const response = await fetch('https://planificador-eventos-backend.onrender.com/api/eventos/');
         
         if (!response.ok) {
           throw new Error('No se pudieron cargar los eventos del servidor.');
