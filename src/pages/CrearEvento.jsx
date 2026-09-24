@@ -109,32 +109,36 @@ const CrearEvento = () => {
 
     setErrores({});
     setSubtareaErrores({});
-    setMensajeAlerta({ tipo: 'exito', texto: '¡Guardado con éxito!' });
 
     // PAYLOAD ADAPTADO AL MODELO DE DJANGO
     const payload = {
       nombre: nombreEvento,
       tipo: tipoEvento,
-      fecha: fechaLimite,                  // Coincide con models.DateField() de Evento
+      fecha: fechaLimite,                     // Coincide con models.DateField() de Evento
       limiteDiarioHoras: valorLimiteNum,
       gestiones: subtareasValidas.map(s => ({
-        descripcion: s.nombre,             // Coincide con models.CharField() de GestionLogistica
-        plazo: s.fecha,                    // Coincide con models.DateField() de plazo
+        descripcion: s.nombre,                 // Coincide con models.CharField() de GestionLogistica
+        plazo: s.fecha,                        // Coincide con models.DateField() de plazo
         horas_estimadas: parseFloat(s.horas.replace(',', '.')) // Coincide con horas_estimadas
       }))
     };
 
     try {
       setCargando(true);
-      const response = await fetch('http://localhost:8000/api/eventos/', { // Puerto típico de Django (8000)
+      const response = await fetch('https://planificador-eventos-backend.onrender.com/api/eventos/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      if (!response.ok) throw new Error();
+      
+      if (!response.ok) {
+        throw new Error('Error al registrar el evento en el servidor.');
+      }
+
+      setMensajeAlerta({ tipo: 'exito', texto: '¡Guardado con éxito!' });
       setTimeout(() => navigate('/hoy'), 1000);
-    } catch {
-      setTimeout(() => navigate('/hoy'), 1000);
+    } catch (err) {
+      setMensajeAlerta({ tipo: 'error', texto: 'No se pudo conectar con el servidor. Inténtalo de nuevo.' });
     } finally {
       setCargando(false);
     }
