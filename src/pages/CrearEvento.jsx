@@ -4,6 +4,11 @@ import { useNavigate } from 'react-router-dom';
 const CrearEvento = () => {
   const navigate = useNavigate();
 
+  // --- CONFIGURACIÓN DINÁMICA DE LA URL DE LA API ---
+  const API_URL = window.location.hostname === 'localhost' 
+    ? 'http://localhost:8080' 
+    : 'https://planificador-eventos-backend.onrender.com';
+
   // Estados del evento y plan logístico
   const [nombreEvento, setNombreEvento] = useState('');
   const [tipoEvento, setTipoEvento] = useState('');
@@ -110,22 +115,22 @@ const CrearEvento = () => {
     setErrores({});
     setSubtareaErrores({});
 
-    // PAYLOAD ADAPTADO AL MODELO DE DJANGO
+    // PAYLOAD ADAPTADO AL MODELO
     const payload = {
       nombre: nombreEvento,
       tipo: tipoEvento,
-      fecha: fechaLimite,                     // Coincide con models.DateField() de Evento
+      fecha: fechaLimite,
       limiteDiarioHoras: valorLimiteNum,
       gestiones: subtareasValidas.map(s => ({
-        descripcion: s.nombre,                 // Coincide con models.CharField() de GestionLogistica
-        plazo: s.fecha,                        // Coincide con models.DateField() de plazo
-        horas_estimadas: parseFloat(s.horas.replace(',', '.')) // Coincide con horas_estimadas
+        descripcion: s.nombre,
+        plazo: s.fecha,
+        horas_estimadas: parseFloat(s.horas.replace(',', '.'))
       }))
     };
 
     try {
       setCargando(true);
-      const response = await fetch('https://planificador-eventos-backend.onrender.com/api/eventos/', {
+      const response = await fetch(`${API_URL}/api/eventos/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
