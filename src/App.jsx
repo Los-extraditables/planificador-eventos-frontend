@@ -1,22 +1,50 @@
-import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
-import Navbar from './components/Navbar';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import { ProtectedRoute } from './components/ProtectedRoute';
+
+// Layouts
+import { AuthLayout } from './layouts/AuthLayout';
+import { MainLayout } from './layouts/MainLayout';
+
+// Páginas Públicas (Autenticación)
+import { LoginPage } from './pages/LoginPage';
+import { RegisterPage } from './pages/RegisterPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+
+// Páginas Privadas
+import Hoy from './pages/Hoy';
 import CrearEvento from './pages/CrearEvento';
 import DetalleEvento from './pages/DetalleEvento';
-import Hoy from './pages/Hoy';
 import Progreso from './pages/Progreso';
 
 function App() {
   return (
-    <Router>
-      <Navbar />
-      <Routes>
-        <Route path="/" element={<Navigate to="/hoy" replace />} />
-        <Route path="/hoy" element={<Hoy />} />
-        <Route path="/crear" element={<CrearEvento />} />
-        <Route path="/evento/:id" element={<DetalleEvento />} />
-        <Route path="/progreso" element={<Progreso />} />
-      </Routes>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <Routes>
+          {/* 1. RUTAS PÚBLICAS (Login, Registro, Recuperación) */}
+          <Route element={<AuthLayout />}>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/registro" element={<RegisterPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          </Route>
+
+          {/* 2. RUTAS PRIVADAS PROTEGIDAS (Requieren Token JWT) */}
+          <Route element={<ProtectedRoute />}>
+            <Route element={<MainLayout />}>
+              <Route path="/hoy" element={<Hoy />} />
+              <Route path="/crear" element={<CrearEvento />} />
+              <Route path="/detalle-evento" element={<DetalleEvento />} />
+              <Route path="/progreso" element={<Progreso />} />
+            </Route>
+          </Route>
+
+          {/* Redirecciones por defecto */}
+          <Route path="/" element={<Navigate to="/hoy" replace />} />
+          <Route path="*" element={<Navigate to="/hoy" replace />} />
+        </Routes>
+      </Router>
+    </AuthProvider>
   );
 }
 

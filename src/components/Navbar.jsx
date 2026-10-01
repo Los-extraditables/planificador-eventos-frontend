@@ -1,48 +1,63 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { authService } from '../services/authService';
 
 const Navbar = () => {
+  const navigate = useNavigate();
+  const usuario = authService.getCurrentUser();
+
+  const handleLogout = () => {
+    authService.logout();
+    navigate('/login');
+  };
+
   return (
     <header style={styles.header}>
       {/* Brand / Logo */}
       <div style={styles.brand}>
         <div style={styles.logoIcon}>
-          <span style={{ frontSize: '1:1rem' }}>📋</span>
+          <span style={{ fontSize: '1.1rem' }}>📋</span>
         </div>
         <span style={styles.brandName}>Event Organizer</span>
       </div>
 
-      {/* Navigation links */}
+      {/* Links de Navegación */}
       <nav style={styles.nav}>
         <NavLink
-        to="/hoy"
-        style={({ isActive }) => (isActive ? { ...styles.link, ...styles.activeLink } : styles.link)}
+          to="/hoy"
+          style={({ isActive }) => (isActive ? { ...styles.link, ...styles.activeLink } : styles.link)}
         >
           Hoy
         </NavLink>
         <NavLink
-        to="/crear"
-        style={({ isActive }) => (isActive ? { ...styles.link, ...styles.activeLink }: styles.link)}
+          to="/crear"
+          style={({ isActive }) => (isActive ? { ...styles.link, ...styles.activeLink } : styles.link)}
         >
           Crear Evento
         </NavLink>
         <NavLink
-        to="/evento/:id"
-        style={({ isActive }) => (isActive ? { ...styles.link, ...styles.activeLink } : styles.link)}
+          to="/detalle-evento"
+          style={({ isActive }) => (isActive ? { ...styles.link, ...styles.activeLink } : styles.link)}
         >
           Detalle Evento
         </NavLink>
         <NavLink
-        to="/progreso"
-        style={({ isActive }) => (isActive ? { ...styles.link, ...styles.activeLink } : styles.link)}
+          to="/progreso"
+          style={({ isActive }) => (isActive ? { ...styles.link, ...styles.activeLink } : styles.link)}
         >
           Progreso
         </NavLink>
       </nav>
 
-      {/* User Profile */}
+      {/* Usuario y Cierre de Sesión */}
       <div style={styles.userSection}>
-        <button style={styles.userButton} aria-label="perfil de usuario">
-          👤
+        <span style={styles.userName}>{usuario?.username || 'Usuario'}</span>
+        <button 
+          onClick={handleLogout} 
+          style={styles.logoutButton} 
+          title="Cerrar Sesión"
+          aria-label="Cerrar sesión"
+        >
+          🚪 Salir
         </button>
       </div>
     </header>
@@ -56,10 +71,10 @@ const styles = {
     justifyContent: 'space-between',
     padding: '0 2rem',
     height: '64px',
-    backgroundColor: '#f8f9fa',
-    borderBottom: '1px solid #e5e7eb',
-    color: '#1f2937',
-    fontFamily: 'sans-serif'
+    backgroundColor: '#ffffff',
+    borderBottom: '1px solid #e2e8f0',
+    color: '#0f172a',
+    fontFamily: 'system-ui, -apple-system, sans-serif'
   },
   brand: {
     display: 'flex',
@@ -70,7 +85,7 @@ const styles = {
     width: '36px',
     height: '36px',
     borderRadius: '8px',
-    backgroundColor: '#0f172a',
+    backgroundColor: '#2563eb',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -90,7 +105,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     textDecoration: 'none',
-    color: '#6b7280',
+    color: '#64748b',
     fontWeight: '500',
     fontSize: '0.95rem',
     borderBottom: '3px solid transparent',
@@ -98,25 +113,33 @@ const styles = {
     transition: 'all 0.2s ease'
   },
   activeLink: {
-    color: '#0f172a',
+    color: '#2563eb',
     fontWeight: '600',
-    borderBottom: '3px solid #0f172a'
+    borderBottom: '3px solid #2563eb'
   },
   userSection: {
     display: 'flex',
-    alignItems: 'center'
+    alignItems: 'center',
+    gap: '12px'
   },
-  userButton: {
-    background: '#ffffff',
-    border: '1px solid #e5e7eb',
-    borderRadius: '50%',
-    width: '36px',
-    height: '36px',
+  userName: {
+    fontSize: '0.9rem',
+    fontWeight: '600',
+    color: '#334155'
+  },
+  logoutButton: {
+    background: '#fef2f2',
+    color: '#dc2626',
+    border: '1px solid #fecaca',
+    borderRadius: '8px',
+    padding: '6px 12px',
+    fontSize: '0.85rem',
+    fontWeight: '600',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: '4px',
     cursor: 'pointer'
-  },
-}
+  }
+};
 
 export default Navbar;

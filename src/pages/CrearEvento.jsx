@@ -1,347 +1,371 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { authService } from '../services/authService';
 
-const CrearEvento = () => {
-  const navigate = useNavigate();
+const CrearEvento = ({ onEventoCreado }) => {
+  const API_URL = import.meta.env.VITE_API_URL || 'https://planificador-eventos-backend.onrender.com/api';
 
-  // Estados del evento y plan logístico
-  const [nombreEvento, setNombreEvento] = useState('');
-  const [tipoEvento, setTipoEvento] = useState('');
-  const [fechaLimite, setFechaLimite] = useState('');
-  const [limiteDiario, setLimiteDiario] = useState('');
+  // Datos Generales del Evento
+  const [formEvento, setFormEvento] = useState({
+    nombre: '',
+    tipo: '',
+    fecha: '',
+    limite_diario_horas: ''
+  });
 
-  const [subtareas, setSubtareas] = useState([
-    { id: 1, nombre: '', fecha: '', horas: '' },
-    { id: 2, nombre: '', fecha: '', horas: '' },
-    { id: 3, nombre: '', fecha: '', horas: '' },
+  // Plan Logístico Inicial (Array de subtareas)
+  const [gestiones, setGestiones] = useState([
+    { id: Date.now(), descripcion: '', plazo: '', horas_estimadas: '' }
   ]);
 
-  // Estados de errores y feedback
-  const [errores, setErrores] = useState({});
-  const [subtareaErrores, setSubtareaErrores] = useState({});
-  const [mensajeAlerta, setMensajeAlerta] = useState({ tipo: '', texto: '' });
   const [cargando, setCargando] = useState(false);
+  const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
 
-  // Limpiar error o alerta al interactuar
-  const limpiarError = (campo) => {
-    if (errores[campo]) setErrores(prev => ({ ...prev, [campo]: null }));
-    if (mensajeAlerta.texto) setMensajeAlerta({ tipo: '', texto: '' });
+  const mostrarMensaje = (tipo, texto) => {
+    setMensaje({ tipo, texto });
+    setTimeout(() => setMensaje({ tipo: '', texto: '' }), 5000);
+  };
+
+  // Manejo de Subtareas / Gestiones
+  const handleGestionChange = (id, field, value) => {
+    setGestiones(gestiones.map(g => g.id === id ? { ...g, [field]: value } : g));
   };
 
   const handleAgregarSubtarea = () => {
-    setSubtareas(prev => [...prev, { id: Date.now(), nombre: '', fecha: '', horas: '' }]);
+    setGestiones([
+      ...gestiones,
+      { id: Date.now(), descripcion: '', plazo: '', horas_estimadas: '' }
+    ]);
   };
 
   const handleEliminarSubtarea = (id) => {
-    if (subtareas.length <= 1) {
-      alert('Debes registrar al menos una subtarea logística.');
-      return;
-    }
-    setSubtareas(prev => prev.filter(s => s.id !== id));
-    setSubtareaErrores(prev => {
-      const copy = { ...prev };
-      delete copy[id];
-      return copy;
-    });
+    setGestiones(gestiones.filter(g => g.id !== id));
   };
 
-  const handleSubtareaChange = (id, field, value) => {
-    setSubtareas(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
-    if (subtareaErrores[id]) {
-      setSubtareaErrores(prev => {
-        const copy = { ...prev };
-        delete copy[id];
-        return copy;
-      });
-    }
-    if (mensajeAlerta.texto) setMensajeAlerta({ tipo: '', texto: '' });
-  };
-
+  // Envío del Formulario
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setMensajeAlerta({ tipo: '', texto: '' });
+  e.preventDefault();
 
-    let errs = {};
+  if (!formEvento.nombre.trim() || !formEvento.tipo || !formEvento.fecha) {
+    mostrarMensaje('error', 'Por favor completa todos los campos requeridos del evento.');
+    return;
+  }
 
-    if (!nombreEvento.trim()) errs.nombreEvento = 'Este campo es obligatorio.';
-    if (!tipoEvento) errs.tipoEvento = 'Selecciona un tipo.';
-    if (!fechaLimite) errs.fechaLimite = 'Este campo es obligatorio.';
+  setCargando(true);
+  const token = authService.getToken();
 
-    let valorLimiteNum = null;
-    if (!limiteDiario.trim()) {
-      errs.limiteDiario = 'Este campo es obligatorio.';
-    } else {
-      valorLimiteNum = parseFloat(limiteDiario.replace(',', '.'));
-      if (isNaN(valorLimiteNum) || valorLimiteNum <= 0 || valorLimiteNum > 24) {
-        errs.limiteDiario = 'Ingresa un valor válido entre 0 y 24 horas.';
-      }
-    }
+  try {
+    const baseUrl = API_URL.endsWith('/') ? API_URL : `${API_URL}/`;
 
-    let subErrs = {};
-    let subtareasValidas = [];
+    // 1. Filtrar y limpiar gestiones para evitar objetos incompletos
+    const gestionesValidas = gestiones
+      .filter(g => g.descripcion && g.descripcion.trim() !== '')
+      .map(g => ({
+        descripcion: g.descripcion.trim(),
+        plazo: g.plazo || formEvento.fecha,
+        horas_estimadas: String(g.horas_estimadas || '0'),
+        completada: false
+      }));
 
-    subtareas.forEach(s => {
-      const tieneNombre = s.nombre.trim() !== '';
-      const tieneFecha = s.fecha !== '';
-      const tieneHoras = s.horas !== '';
-
-      if (tieneNombre || tieneFecha || tieneHoras) {
-        if (!tieneNombre || !tieneFecha || !tieneHoras) {
-          subErrs[s.id] = 'Completa nombre, fecha y horas.';
-        } else if (fechaLimite && s.fecha > fechaLimite) {
-          subErrs[s.id] = 'No puede ser posterior a la fecha límite del evento.';
-        } else {
-          subtareasValidas.push(s);
-        }
-      }
-    });
-
-    if (subtareasValidas.length === 0) {
-      errs.subtareasGeneral = 'Completa por lo menos una subtarea logística.';
-    }
-
-    if (Object.keys(errs).length > 0 || Object.keys(subErrs).length > 0) {
-      setErrores(errs);
-      setSubtareaErrores(subErrs);
-      setMensajeAlerta({ tipo: 'error', texto: 'Por favor corrige los errores antes de guardar.' });
-      return;
-    }
-
-    setErrores({});
-    setSubtareaErrores({});
-
-    // PAYLOAD ADAPTADO AL MODELO DE DJANGO
     const payload = {
-      nombre: nombreEvento,
-      tipo: tipoEvento,
-      fecha: fechaLimite,
-      limiteDiarioHoras: valorLimiteNum,
-      gestiones: subtareasValidas.map(s => ({
-        descripcion: s.nombre,
-        plazo: s.fecha,
-        horas_estimadas: parseFloat(s.horas.replace(',', '.'))
-      }))
+      nombre: formEvento.nombre,
+      tipo: formEvento.tipo,
+      fecha: formEvento.fecha,
+      limite_diario_horas: parseFloat(formEvento.limite_diario_horas) || 6.00,
+      gestiones: gestionesValidas
     };
 
-    // URL dinámica: Usa localhost si estás en tu PC o la de Render si se despliega/revisa online
-    const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-      ? 'http://localhost:8000/api/eventos/'
-      : 'https://planificador-eventos-backend.onrender.com/api/eventos/';
+    const resEvento = await fetch(`${baseUrl}eventos/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    });
 
-    try {
-      setCargando(true);
-      const response = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      
-      if (!response.ok) throw new Error('Error al conectar con el servidor');
-
-      setMensajeAlerta({ tipo: 'exito', texto: '¡Guardado con éxito!' });
-      setTimeout(() => navigate('/hoy'), 1000);
-    } catch (err) {
-      console.error(err);
-      setMensajeAlerta({ tipo: 'error', texto: 'No se pudo guardar el evento. Intenta nuevamente.' });
-    } finally {
-      setCargando(false);
+    if (resEvento.status === 401) {
+      authService.logout();
+      window.location.href = '/login';
+      return;
     }
-  };
 
+    if (!resEvento.ok) {
+      const errData = await resEvento.json();
+      console.error('Error estructurado del backend:', errData);
+
+      // Convierte en texto entendible los errores anidados (como [object Object])
+      const formatearError = (obj) => {
+        if (typeof obj === 'string') return obj;
+        if (Array.isArray(obj)) return obj.map(formatearError).join(', ');
+        if (typeof obj === 'object' && obj !== null) {
+          return Object.entries(obj)
+            .map(([k, v]) => `${k}: ${formatearError(v)}`)
+            .join(' | ');
+        }
+        return String(obj);
+      };
+
+      throw new Error(formatearError(errData));
+    }
+
+    mostrarMensaje('exito', '¡Evento y plan inicial creados con éxito!');
+
+    // Resetear formulario
+    setFormEvento({ nombre: '', tipo: '', fecha: '', limite_diario_horas: '' });
+    setGestiones([{ id: Date.now(), descripcion: '', plazo: '', horas_estimadas: '' }]);
+
+    if (onEventoCreado) onEventoCreado();
+
+  } catch (err) {
+    mostrarMensaje('error', err.message);
+  } finally {
+    setCargando(false);
+  }
+};
   return (
-    <>
-      <style>{`
-        .crear-container * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        .crear-container { background-color: #f8fafc; min-height: 100vh; padding: 40px 20px 80px; display: flex; flex-direction: column; align-items: center; }
-        .crear-header { text-align: center; margin-bottom: 28px; }
-        .crear-header h1 { font-size: 24px; font-weight: 700; color: #0f172a; margin: 0 0 8px; }
-        .crear-header p { font-size: 14px; color: #64748b; margin: 0; }
-        .crear-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px 28px; width: 100%; max-width: 640px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
-        .crear-card-title { font-size: 16px; font-weight: 700; color: #0f172a; margin: 0 0 16px; }
-        .crear-card-sub { font-size: 13px; color: #64748b; margin: -10px 0 16px; }
-        .form-group { display: flex; flex-direction: column; margin-bottom: 16px; }
-        .form-group label { font-size: 12px; font-weight: 600; color: #334155; margin-bottom: 6px; }
-        .req { color: #ef4444; }
-        .input-text, .select-text, .input-date { width: 100%; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; color: #1e293b; outline: none; background: #fff; }
-        .input-text:focus, .select-text:focus, .input-date:focus { border-color: #6366f1; }
+    <div style={{ maxWidth: '850px', margin: '0 auto', padding: '30px 20px', fontFamily: 'system-ui, sans-serif', color: '#0f172a', textAlign: 'left' }}>
+      
+      {/* Encabezado Principal */}
+      <div style={{ textAlign: 'left', marginBottom: '28px' }}>
+        <h1 style={{ fontSize: '1.75rem', fontWeight: '700', marginBottom: '6px', textAlign: 'left' }}>
+          Crear Nuevo Evento y Plan Inicial
+        </h1>
+        <p style={{ color: '#64748b', fontSize: '0.95rem', margin: 0, textAlign: 'left' }}>
+          Registra los datos generales de tu evento y el desglose opcional de subtareas logísticas.
+        </p>
+      </div>
+
+      {/* Alerta de Mensajes */}
+      {mensaje.texto && (
+        <div style={{
+          padding: '12px 16px', borderRadius: '8px', marginBottom: '20px', fontWeight: '500', textAlign: 'left',
+          backgroundColor: mensaje.tipo === 'exito' ? '#f0fdf4' : '#fef2f2',
+          border: `1px solid ${mensaje.tipo === 'exito' ? '#bbf7d0' : '#fecaca'}`,
+          color: mensaje.tipo === 'exito' ? '#16a34a' : '#dc2626'
+        }}>
+          {mensaje.texto}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} style={{ textAlign: 'left' }}>
         
-        .alert-figma-error, .alert-figma-exito { padding: 12px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; width: 100%; max-width: 640px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
-        .alert-figma-error { background-color: #fef2f2; border: 1px solid #fecaca; color: #dc2626; }
-        .alert-figma-exito { background-color: #f0fdf4; border: 1px solid #bbf7d0; color: #16a34a; }
-        
-        .input-error { border-color: #ef4444 !important; background-color: #fef2f2 !important; }
-        .error-text-sub { color: #ef4444; font-size: 12px; margin-top: 4px; display: block; }
-        
-        .row-2 { display: flex; gap: 16px; }
-        .row-2 > div { flex: 1; }
+        {/* BLOQUE 1: Datos del Evento */}
+        <div style={cardStyle}>
+          <h2 style={cardTitleStyle}>Datos del Evento</h2>
 
-        .input-with-suffix { position: relative; display: flex; align-items: center; width: 200px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; }
-        .input-with-suffix input { width: 100%; padding: 10px 14px; padding-right: 40px; border: none; outline: none; background: transparent; font-size: 14px; color: #1e293b; }
-        .input-suffix { position: absolute; right: 12px; font-size: 13px; color: #94a3b8; pointer-events: none; }
+          <div style={{ marginBottom: '18px', textAlign: 'left' }}>
+            <label style={labelStyle}>Nombre del Evento <span style={{ color: '#ef4444' }}>*</span></label>
+            <input
+              type="text"
+              required
+              placeholder="Ej. Lanzamiento Producto X"
+              style={inputStyle}
+              value={formEvento.nombre}
+              onChange={(e) => setFormEvento({ ...formEvento, nombre: e.target.value })}
+            />
+          </div>
 
-        .subtasks-header { display: grid; grid-template-columns: 1fr 160px 100px 32px; gap: 12px; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; }
-        .subtask-row { display: grid; grid-template-columns: 1fr 160px 100px 32px; gap: 12px; align-items: center; margin-bottom: 12px; }
-        .btn-delete { background: transparent; border: none; color: #94a3b8; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; height: 38px; }
-        .btn-delete:hover { color: #ef4444; }
-        .subtask-error-row { color: #ef4444; font-size: 12px; margin: -8px 0 12px; }
-        .btn-add { background: transparent; border: none; color: #4f46e5; font-size: 13px; font-weight: 600; cursor: pointer; padding: 4px 0; display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; }
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '18px' }}>
+            <div style={{ textAlign: 'left' }}>
+              <label style={labelStyle}>Tipo <span style={{ color: '#ef4444' }}>*</span></label>
+              <select
+                required
+                style={{ ...inputStyle, background: '#fff', cursor: 'pointer' }}
+                value={formEvento.tipo}
+                onChange={(e) => setFormEvento({ ...formEvento, tipo: e.target.value })}
+              >
+                <option value="">Selecciona el tipo de evento</option>
+                <option value="Corporativo">Corporativo</option>
+                <option value="Social">Social</option>
+                <option value="Academico">Académico</option>
+                <option value="Otro">Otro</option>
+              </select>
+            </div>
 
-        .footer-buttons { display: flex; justify-content: flex-end; gap: 12px; width: 100%; max-width: 640px; }
-        .btn-cancelar { background-color: #fff; color: #334155; border: 1px solid #cbd5e1; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
-        .btn-guardar { background-color: #5846f6; color: #fff; border: none; padding: 10px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
-        .btn-guardar:disabled { opacity: 0.6; }
-      `}</style>
+            <div style={{ textAlign: 'left' }}>
+              <label style={labelStyle}>Fecha límite del Evento <span style={{ color: '#ef4444' }}>*</span></label>
+              <input
+                type="date"
+                required
+                style={inputStyle}
+                value={formEvento.fecha}
+                onChange={(e) => setFormEvento({ ...formEvento, fecha: e.target.value })}
+              />
+            </div>
+          </div>
 
-      <div className="crear-container">
-        <div className="crear-header">
-          <h1>Crear Nuevo Evento y Plan Inicial</h1>
-          <p>Registra los datos generales de tu evento y desglose de subtareas logísticas.</p>
+          <div style={{ textAlign: 'left' }}>
+            <label style={labelStyle}>Límite diario de carga de trabajo <span style={{ color: '#ef4444' }}>*</span></label>
+            <div style={{ position: 'relative', maxWidth: '280px' }}>
+              <input
+                type="number"
+                required
+                step="0.5"
+                placeholder="Ej. 6.00"
+                style={{ ...inputStyle, paddingRight: '60px' }}
+                value={formEvento.limite_diario_horas}
+                onChange={(e) => setFormEvento({ ...formEvento, limite_diario_horas: e.target.value })}
+              />
+              <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748b', fontSize: '0.85rem' }}>
+                hrs/día
+              </span>
+            </div>
+            <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '6px 0 0 0', textAlign: 'left' }}>
+              ⓘ Referencia sugerida: 6.00 horas por día.
+            </p>
+          </div>
         </div>
 
-        {mensajeAlerta.texto && (
-          <div className={mensajeAlerta.tipo === 'error' ? 'alert-figma-error' : 'alert-figma-exito'}>
-            <span>{mensajeAlerta.tipo === 'error' ? '⚠️' : '✅'}</span>
-            <span>{mensajeAlerta.texto}</span>
+        {/* BLOQUE 2: Plan Logístico Inicial */}
+        <div style={cardStyle}>
+          <h2 style={cardTitleStyle}>Plan Logístico Inicial (Opcional)</h2>
+          <p style={{ color: '#64748b', fontSize: '0.9rem', marginTop: 0, marginBottom: '16px', textAlign: 'left' }}>
+            Define las gestiones iniciales necesarias para organizar tu evento.
+          </p>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '2fr 1fr 1fr 40px',
+            gap: '12px',
+            marginBottom: '8px',
+            padding: '0 4px',
+            textAlign: 'left'
+          }}>
+            <span style={colHeaderStyle}>NOMBRE DE LA GESTIÓN</span>
+            <span style={colHeaderStyle}>PLAZO</span>
+            <span style={colHeaderStyle}>HORAS EST.</span>
+            <span></span>
           </div>
-        )}
 
-        <form onSubmit={handleSubmit} style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-
-          {/* TARJETA 1: Datos del Evento */}
-          <div className="crear-card">
-            <h2 className="crear-card-title">Datos del Evento</h2>
-
-            <div className="form-group">
-              <label>Nombre del Evento <span className="req">*</span></label>
+          {gestiones.map((gest, index) => (
+            <div key={gest.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 40px', gap: '12px', alignItems: 'center', marginBottom: '12px' }}>
               <input
                 type="text"
-                className={`input-text ${errores.nombreEvento ? 'input-error' : ''}`}
-                placeholder="Ej. Lanzamiento Producto X"
-                value={nombreEvento}
-                onChange={(e) => { setNombreEvento(e.target.value); limpiarError('nombreEvento'); }}
+                placeholder={index === 0 ? "Ej. Reservar salón" : "Ej. Confirmar catering"}
+                style={inputStyle}
+                value={gest.descripcion}
+                onChange={(e) => handleGestionChange(gest.id, 'descripcion', e.target.value)}
               />
-              {errores.nombreEvento && <span className="error-text-sub">{errores.nombreEvento}</span>}
+              <input
+                type="date"
+                style={inputStyle}
+                value={gest.plazo}
+                onChange={(e) => handleGestionChange(gest.id, 'plazo', e.target.value)}
+              />
+              <input
+                type="number"
+                step="0.5"
+                placeholder="0.0"
+                style={inputStyle}
+                value={gest.horas_estimadas}
+                onChange={(e) => handleGestionChange(gest.id, 'horas_estimadas', e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => handleEliminarSubtarea(gest.id)}
+                style={{
+                  background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '1.1rem',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}
+                title="Eliminar subtarea"
+              >
+                🗑️
+              </button>
             </div>
+          ))}
 
-            <div className="row-2">
-              <div className="form-group">
-                <label>Tipo <span className="req">*</span></label>
-                <select
-                  className={`select-text ${errores.tipoEvento ? 'input-error' : ''}`}
-                  value={tipoEvento}
-                  onChange={(e) => { setTipoEvento(e.target.value); limpiarError('tipoEvento'); }}
-                >
-                  <option value="" disabled hidden>Seleccionar tipo...</option>
-                  <option value="Corporativo">Corporativo</option>
-                  <option value="Social">Social</option>
-                  <option value="Academico">Académico</option>
-                  <option value="Otro">Otro</option>
-                </select>
-                {errores.tipoEvento && <span className="error-text-sub">{errores.tipoEvento}</span>}
-              </div>
+          <button
+            type="button"
+            onClick={handleAgregarSubtarea}
+            style={{
+              background: 'none', border: 'none', color: '#2563eb', fontWeight: '600', fontSize: '0.9rem',
+              cursor: 'pointer', padding: '8px 0', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px'
+            }}
+          >
+            + Agregar otra subtarea
+          </button>
+        </div>
 
-              <div className="form-group">
-                <label>Fecha límite del Evento <span className="req">*</span></label>
-                <input
-                  type="date"
-                  className={`input-date ${errores.fechaLimite ? 'input-error' : ''}`}
-                  value={fechaLimite}
-                  onChange={(e) => { setFechaLimite(e.target.value); limpiarError('fechaLimite'); }}
-                />
-                {errores.fechaLimite && <span className="error-text-sub">{errores.fechaLimite}</span>}
-              </div>
-            </div>
+        {/* Botones de Acción final */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
+          <button
+            type="button"
+            onClick={() => {
+              setFormEvento({ nombre: '', tipo: '', fecha: '', limite_diario_horas: '' });
+              setGestiones([{ id: Date.now(), descripcion: '', plazo: '', horas_estimadas: '' }]);
+            }}
+            style={{
+              backgroundColor: '#fff', border: '1px solid #cbd5e1', color: '#334155', padding: '10px 20px',
+              borderRadius: '8px', fontSize: '0.95rem', fontWeight: '600', cursor: 'pointer'
+            }}
+          >
+            Limpiar
+          </button>
+          <button
+            type="submit"
+            disabled={cargando}
+            style={{
+              backgroundColor: '#2563eb', border: 'none', color: '#fff', padding: '10px 24px',
+              borderRadius: '8px', fontSize: '0.95rem', fontWeight: '600', cursor: 'pointer',
+              opacity: cargando ? 0.7 : 1
+            }}
+          >
+            {cargando ? 'Guardando...' : 'Guardar Evento'}
+          </button>
+        </div>
 
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label>Límite diario de carga de trabajo <span className="req">*</span></label>
-              <div className={`input-with-suffix ${errores.limiteDiario ? 'input-error' : ''}`}>
-                <input
-                  type="text"
-                  placeholder="6,0"
-                  value={limiteDiario}
-                  onChange={(e) => { setLimiteDiario(e.target.value); limpiarError('limiteDiario'); }}
-                />
-                <span className="input-suffix">hrs</span>
-              </div>
-              {errores.limiteDiario && <span className="error-text-sub">{errores.limiteDiario}</span>}
-            </div>
-          </div>
-
-          {/* TARJETA 2: Plan Logístico Inicial */}
-          <div className="crear-card">
-            <h2 className="crear-card-title">Plan Logístico Inicial</h2>
-            <p className="crear-card-sub">Define al menos una subtarea con su nombre, fecha y horas estimadas.</p>
-
-            {errores.subtareasGeneral && (
-              <div style={{ color: '#ef4444', fontSize: '13px', marginBottom: '12px', fontWeight: '500' }}>
-                ⚠️ {errores.subtareasGeneral}
-              </div>
-            )}
-
-            <div className="subtasks-header">
-              <span>NOMBRE</span>
-              <span>PLAZO</span>
-              <span>HORAS EST.</span>
-              <span></span>
-            </div>
-
-            {subtareas.map((sub) => (
-              <React.Fragment key={sub.id}>
-                <div className="subtask-row">
-                  <input
-                    type="text"
-                    className={`input-text ${subtareaErrores[sub.id] ? 'input-error' : ''}`}
-                    placeholder="Ej. Reservar salón"
-                    value={sub.nombre}
-                    onChange={(e) => handleSubtareaChange(sub.id, 'nombre', e.target.value)}
-                  />
-                  <input
-                    type="date"
-                    className={`input-date ${subtareaErrores[sub.id] ? 'input-error' : ''}`}
-                    value={sub.fecha}
-                    onChange={(e) => handleSubtareaChange(sub.id, 'fecha', e.target.value)}
-                  />
-                  <input
-                    type="text"
-                    className={`input-text ${subtareaErrores[sub.id] ? 'input-error' : ''}`}
-                    placeholder="0,0"
-                    value={sub.horas}
-                    onChange={(e) => handleSubtareaChange(sub.id, 'horas', e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="btn-delete"
-                    onClick={() => handleEliminarSubtarea(sub.id)}
-                    title="Eliminar subtarea"
-                  >
-                    🗑️
-                  </button>
-                </div>
-                {subtareaErrores[sub.id] && (
-                  <div className="subtask-error-row">{subtareaErrores[sub.id]}</div>
-                )}
-              </React.Fragment>
-            ))}
-
-            <button type="button" className="btn-add" onClick={handleAgregarSubtarea}>
-              + Agregar otra subtarea
-            </button>
-          </div>
-
-          {/* BOTONES INFERIORES */}
-          <div className="footer-buttons">
-            <button type="button" className="btn-cancelar" onClick={() => navigate('/hoy')}>
-              Cancelar
-            </button>
-            <button type="submit" className="btn-guardar" disabled={cargando}>
-              {cargando ? 'Guardando...' : 'Guardar Evento'}
-            </button>
-          </div>
-
-        </form>
-      </div>
-    </>
+      </form>
+    </div>
   );
+};
+
+// Estilos Compartidos
+const cardStyle = {
+  backgroundColor: '#ffffff',
+  border: '1px solid #e2e8f0',
+  borderRadius: '12px',
+  padding: '24px',
+  marginBottom: '20px',
+  boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+  textAlign: 'left'
+};
+
+const cardTitleStyle = {
+  fontSize: '1.15rem',
+  fontWeight: '700',
+  color: '#0f172a',
+  marginTop: 0,
+  marginBottom: '16px',
+  textAlign: 'left'
+};
+
+const labelStyle = {
+  display: 'block',
+  fontSize: '0.85rem',
+  fontWeight: '600',
+  color: '#334155',
+  marginBottom: '6px',
+  textAlign: 'left'
+};
+
+const inputStyle = {
+  width: '100%',
+  padding: '10px 14px',
+  border: '1px solid #cbd5e1',
+  borderRadius: '8px',
+  fontSize: '0.9rem',
+  boxSizing: 'border-box',
+  outline: 'none',
+  color: '#0f172a',
+  textAlign: 'left'
+};
+
+const colHeaderStyle = {
+  fontSize: '0.75rem',
+  fontWeight: '700',
+  color: '#64748b',
+  letterSpacing: '0.05em',
+  textAlign: 'left'
 };
 
 export default CrearEvento;
