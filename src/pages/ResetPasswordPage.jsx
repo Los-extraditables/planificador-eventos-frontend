@@ -54,11 +54,11 @@ const ResetPasswordPage = () => {
       setCargando(true);
       setMensaje({ tipo: '', texto: '' });
 
-      // Limpieza y decodificación de seguridad para uid y token
       const cleanUid = decodeURIComponent(rawUid).trim();
       const cleanToken = decodeURIComponent(rawToken).trim();
 
-      const response = await fetch(`${API_URL}/auth/users/reset_password_confirm/`, {
+      // RUTA PERSONALIZADA DEL BACKEND: /password-reset-confirm/
+      const response = await fetch(`${API_URL}/password-reset-confirm/`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -75,7 +75,6 @@ const ResetPasswordPage = () => {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         
-        // Captura detallada de la respuesta de error de Django/Djoser
         const errorMsg = 
           errorData.detail || 
           errorData.token?.[0] || 
