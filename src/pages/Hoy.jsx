@@ -207,7 +207,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
   });
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-6xl mx-auto space-y-6 bg-slate-50/50 min-h-screen text-slate-800 text-left">
+    <div className="p-4 sm:p-6 md:p-8 max-w-6xl mx-auto space-y-6 bg-slate-50/50 min-h-screen text-slate-800 text-left font-sans">
       {/* Mensajes Flotantes */}
       {mensaje.texto && (
         <div
@@ -235,9 +235,35 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
 
       {cargando && <p className="text-sm text-slate-500">⏳ Cargando panel...</p>}
 
-      {error && (
-        <div className="p-4 text-red-600 bg-red-50 rounded-xl text-sm border border-red-100">
-          ⚠ {error}
+      {/* ESTADO DE ERROR (Exactamente como en el Figma) */}
+      {error && !cargando && (
+        <div className="flex flex-col items-center justify-center text-center py-16 px-4">
+          {/* Icono redondeado rosa/rojo suave con wifi tachado */}
+          <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mb-6 text-red-400">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 5.636a9 9 0 010 12.728m-2.829-2.829a5 5 0 010-7.07 1 1 0 011.414-1.414 7 7 0 010 9.9 1 1 0 01-1.414-1.414M12 12a2 2 0 100-4 2 2 0 000 4z" />
+              <line x1="3" y1="3" x2="21" y2="21" stroke="currentColor" strokeWidth={2} strokeLinecap="round" />
+            </svg>
+          </div>
+
+          <h2 className="text-xl sm:text-2xl font-extrabold text-[#0F172A] mb-2 tracking-tight">
+            No pudimos cargar tus actividades
+          </h2>
+
+          <p className="text-sm text-slate-500 max-w-md mb-6 leading-relaxed">
+            Parece que perdimos la conexión. Compruébala e inténtalo de nuevo.
+          </p>
+
+          <button
+            type="button"
+            onClick={obtenerEventos}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-[#E10000] hover:bg-red-700 text-white font-bold text-sm rounded-xl transition-all shadow-sm cursor-pointer"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Volver a intentar
+          </button>
         </div>
       )}
 
