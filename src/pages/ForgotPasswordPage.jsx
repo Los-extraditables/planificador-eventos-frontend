@@ -17,6 +17,7 @@ export const ForgotPasswordPage = () => {
     try {
       await authService.forgotPassword(email);
       setMessage('Se han enviado las instrucciones de recuperación a tu correo electrónico.');
+      setEmail(''); // Limpia el formulario tras un envío exitoso
     } catch (err) {
       // Si el backend da error de timeout por SMTP, mostramos un mensaje descriptivo
       const msjError = err.message?.includes('500') || err.message?.includes('servidor')
@@ -39,13 +40,13 @@ export const ForgotPasswordPage = () => {
       </p>
 
       {message && (
-        <div className="bg-emerald-50 text-emerald-700 text-xs p-3.5 rounded-xl mb-5 border border-emerald-100">
+        <div className="bg-emerald-50 text-emerald-700 text-xs p-3.5 rounded-xl mb-5 border border-emerald-100 font-medium">
           {message}
         </div>
       )}
 
       {error && (
-        <div className="bg-red-50 text-red-600 text-xs p-3.5 rounded-xl mb-5 border border-red-100">
+        <div className="bg-red-50 text-red-600 text-xs p-3.5 rounded-xl mb-5 border border-red-100 font-medium">
           {error}
         </div>
       )}
@@ -58,8 +59,9 @@ export const ForgotPasswordPage = () => {
           <input
             type="email"
             required
+            disabled={loading}
             placeholder="Ingresa tu correo electrónico"
-            className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent transition"
+            className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent transition disabled:bg-gray-100 disabled:cursor-not-allowed"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
@@ -68,7 +70,9 @@ export const ForgotPasswordPage = () => {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-[#3B0764] hover:bg-[#2E1065] text-white font-semibold py-3 rounded-xl text-sm transition shadow-lg shadow-purple-950/20 mt-2 disabled:opacity-50"
+          aria-disabled={loading}
+          aria-busy={loading}
+          className="w-full bg-[#3B0764] hover:bg-[#2E1065] text-white font-semibold py-3 rounded-xl text-sm transition shadow-lg shadow-purple-950/20 mt-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         >
           {loading ? 'Enviando...' : 'Enviar enlace'}
         </button>
@@ -82,3 +86,5 @@ export const ForgotPasswordPage = () => {
     </div>
   );
 };
+
+export default ForgotPasswordPage;

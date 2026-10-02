@@ -48,7 +48,11 @@ export const authService = {
         localStorage.setItem('user', JSON.stringify(userProfile));
         return { token: data.access, user: userProfile };
       } catch {
-        const fallbackUser = { username };
+        const fallbackUser = { 
+          username,
+          first_name: data.first_name || '',
+          last_name: data.last_name || ''
+        };
         localStorage.setItem('user', JSON.stringify(fallbackUser));
         return { token: data.access, user: fallbackUser };
       }
@@ -59,15 +63,19 @@ export const authService = {
 
   // 2. Registro de Usuario (POST /api/register/)
   register: async (userData) => {
+    const payload = {
+      username: userData.email,
+      email: userData.email,
+      first_name: userData.first_name || '',
+      last_name: userData.last_name || '',
+      password: userData.password,
+      password_confirmation: userData.password,
+    };
+
     return await safeFetch(`${API_URL}/register/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: userData.fullName || userData.email,
-        email: userData.email,
-        password: userData.password,
-        password_confirmation: userData.password,
-      }),
+      body: JSON.stringify(payload),
     });
   },
 
@@ -84,13 +92,13 @@ export const authService = {
   },
 
   // 4. Recuperar Contraseña (POST /api/password-reset/)
-forgotPassword: async (email) => {
-  return await safeFetch(`${API_URL}/password-reset/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email }),
-  });
-},
+  forgotPassword: async (email) => {
+    return await safeFetch(`${API_URL}/password-reset/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+  },
 
   // 5. Cerrar Sesión
   logout: () => {

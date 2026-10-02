@@ -6,6 +6,13 @@ const DetalleEvento = () => {
   const { id: urlId } = useParams();
   const navigate = useNavigate();
 
+  // Fecha local en formato YYYY-MM-DD
+  const hoyLocal = new Date();
+  const year = hoyLocal.getFullYear();
+  const month = String(hoyLocal.getMonth() + 1).padStart(2, '0');
+  const day = String(hoyLocal.getDate()).padStart(2, '0');
+  const hoyStr = `${year}-${month}-${day}`;
+
   const [eventos, setEventos] = useState([]);
   const [eventoSeleccionadoId, setEventoSeleccionadoId] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -27,7 +34,18 @@ const DetalleEvento = () => {
 
   const mostrarMensaje = (tipo, texto) => {
     setMensaje({ tipo, texto });
-    setTimeout(() => setMensaje({ tipo: '', texto: '' }), 4000);
+    setTimeout(() => setMensaje({ tipo: '', texto: '' }), 5000);
+  };
+
+  const formatearError = (obj) => {
+    if (typeof obj === 'string') return obj;
+    if (Array.isArray(obj)) return obj.map(formatearError).join(', ');
+    if (typeof obj === 'object' && obj !== null) {
+      return Object.entries(obj)
+        .map(([k, v]) => `${k}: ${formatearError(v)}`)
+        .join(' | ');
+    }
+    return String(obj);
   };
 
   const obtenerEventos = async (reintento = true) => {
@@ -49,13 +67,11 @@ const DetalleEvento = () => {
         }
       });
 
-      // Si el token expiró (Error 401 o 403), redirigir al login
       if (response.status === 401 || response.status === 403) {
         handleSesionExpirada();
         return;
       }
 
-      // Si Render estaba en reposo y devolvió un fallo temporal, reintentamos 1 vez más
       if (!response.ok && reintento) {
         await new Promise(res => setTimeout(res, 2000));
         return obtenerEventos(false);
@@ -70,7 +86,7 @@ const DetalleEvento = () => {
 
       if (urlId) {
         setEventoSeleccionadoId(urlId);
-      } else if (data.length > 0) {
+      } else if (data.length > 0 && !eventoSeleccionadoId) {
         setEventoSeleccionadoId(data[0].id);
       }
     } catch (err) {
@@ -106,7 +122,11 @@ const DetalleEvento = () => {
         return;
       }
 
-      if (!response.ok) throw new Error('Error al actualizar la gestión.');
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(formatearError(errData));
+      }
+
       obtenerEventos();
     } catch (err) {
       mostrarMensaje('error', err.message);
@@ -114,7 +134,7 @@ const DetalleEvento = () => {
   };
 
   const handleAbrirCrear = () => {
-    setFormGestion({ descripcion: '', plazo: eventoActivo?.fecha || '', horas_estimadas: '' });
+    setFormGestion({ descripcion: '', plazo: eventoActivo?.fecha || hoyStr, horas_estimadas: '' });
     setModalGestion({ abierto: true, modo: 'crear', gestionId: null });
   };
 
@@ -132,17 +152,44 @@ const DetalleEvento = () => {
     const token = authService.getToken();
     if (!token) return handleSesionExpirada();
 
+    const plazoFinal = formGestion.plazo || eventoActivo?.fecha;
+    const nuevasHoras = parseFloat(formGestion.horas_estimadas) || 0;
+
+    if (plazoFinal < hoyStr) {
+      mostrarMensaje('error', 'El plazo límite no puede ser anterior a la fecha actual.');
+      return;
+    }
+
+    if (eventoActivo?.fecha && plazoFinal > eventoActivo.fecha) {
+      mostrarMensaje('error', `El plazo de la gestión no puede exceder la fecha límite del evento (${eventoActivo.fecha}).`);
+      return;
+    }
+
+    // Validación de Carga Horaria Diaria
+    const gestionesActuales = eventoActivo?.gestiones || eventoActivo?.gestiones_plan || [];
+    const limiteHoras = parseFloat(eventoActivo?.limite_diario_horas) || 6;
+
+    const horasExistentesDia = gestionesActuales
+      .filter(g => g.plazo === plazoFinal && g.id !== modalGestion.gestionId)
+      .reduce((acc, g) => acc + (parseFloat(g.horas_estimadas) || 0), 0);
+
+    if (horasExistentesDia + nuevasHoras > limiteHoras) {
+      mostrarMensaje(
+        'error',
+        `La suma de horas para la fecha ${plazoFinal} (${horasExistentesDia + nuevasHoras}h) supera el límite diario del evento de ${limiteHoras}h.`
+      );
+      return;
+    }
+
     try {
+      const payloadBase = {
+        descripcion: formGestion.descripcion.trim(),
+        plazo: plazoFinal,
+        horas_estimadas: nuevasHoras,
+        completada: false
+      };
+
       if (modalGestion.modo === 'crear') {
-        const nuevaGestion = {
-          descripcion: formGestion.descripcion,
-          plazo: formGestion.plazo || eventoActivo.fecha,
-          horas_estimadas: String(formGestion.horas_estimadas || '0'),
-          completada: false
-        };
-
-        const gestionesActuales = eventoActivo.gestiones || eventoActivo.gestiones_plan || [];
-
         let response = await fetch(`${API_URL}/gestiones/`, {
           method: 'POST',
           headers: {
@@ -150,7 +197,7 @@ const DetalleEvento = () => {
             'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
-            ...nuevaGestion,
+            ...payloadBase,
             evento: parseInt(eventoActivo.id, 10),
             evento_id: parseInt(eventoActivo.id, 10)
           })
@@ -159,7 +206,7 @@ const DetalleEvento = () => {
         if (!response.ok) {
           const payloadEvento = {
             ...eventoActivo,
-            gestiones: [...gestionesActuales, nuevaGestion]
+            gestiones: [...gestionesActuales, payloadBase]
           };
 
           response = await fetch(`${API_URL}/eventos/${eventoActivo.id}/`, {
@@ -177,23 +224,24 @@ const DetalleEvento = () => {
           return;
         }
 
-        if (!response.ok) throw new Error('No se pudo añadir la gestión.');
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(formatearError(errData));
+        }
 
         mostrarMensaje('exito', 'Gestión añadida con éxito.');
       } else {
-        const payloadEditar = {
-          descripcion: formGestion.descripcion,
-          plazo: formGestion.plazo,
-          horas_estimadas: String(formGestion.horas_estimadas || '0')
-        };
-
         const response = await fetch(`${API_URL}/gestiones/${modalGestion.gestionId}/`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify(payloadEditar)
+          body: JSON.stringify({
+            descripcion: formGestion.descripcion.trim(),
+            plazo: plazoFinal,
+            horas_estimadas: nuevasHoras
+          })
         });
 
         if (response.status === 401 || response.status === 403) {
@@ -201,7 +249,11 @@ const DetalleEvento = () => {
           return;
         }
 
-        if (!response.ok) throw new Error('No se pudo actualizar la gestión.');
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(formatearError(errData));
+        }
+
         mostrarMensaje('exito', 'Gestión actualizada correctamente.');
       }
 
@@ -229,7 +281,10 @@ const DetalleEvento = () => {
         return;
       }
 
-      if (!response.ok) throw new Error('No se pudo eliminar la gestión.');
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(formatearError(errData) || 'No se pudo eliminar la gestión.');
+      }
 
       mostrarMensaje('exito', 'Gestión eliminada.');
       obtenerEventos();
@@ -313,6 +368,11 @@ const DetalleEvento = () => {
           <span className="text-xs font-semibold text-slate-500 ml-1">
             📅 Límite: {eventoActivo?.fecha || 'Sin fecha'}
           </span>
+          {eventoActivo?.limite_diario_horas && (
+            <span className="text-xs font-semibold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-100">
+              ⏱ Máx {eventoActivo.limite_diario_horas}h/día
+            </span>
+          )}
         </div>
       </div>
 
@@ -338,7 +398,7 @@ const DetalleEvento = () => {
             <span className="text-xs font-semibold text-slate-400">{totalGestiones} tareas</span>
             <button
               onClick={handleAbrirCrear}
-              className="px-4 py-2 bg-[#3B0764] hover:bg-[#2E1065] text-white font-bold text-xs rounded-xl transition shadow-md shadow-purple-950/20"
+              className="px-4 py-2 bg-[#3B0764] hover:bg-[#2E1065] text-white font-bold text-xs rounded-xl transition shadow-md shadow-purple-950/20 cursor-pointer"
             >
               + Añadir Gestión
             </button>
@@ -385,14 +445,14 @@ const DetalleEvento = () => {
                   <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
                     <button
                       onClick={() => handleAbrirEditar(sub)}
-                      className="p-1.5 text-slate-400 hover:text-purple-700 rounded-lg transition"
+                      className="p-1.5 text-slate-400 hover:text-purple-700 rounded-lg transition cursor-pointer"
                       title="Editar"
                     >
                       ✏️
                     </button>
                     <button
                       onClick={() => handleEliminarGestion(sub.id)}
-                      className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg transition"
+                      className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg transition cursor-pointer"
                       title="Eliminar"
                     >
                       🗑️
@@ -435,6 +495,7 @@ const DetalleEvento = () => {
                 <input
                   type="date"
                   required
+                  min={hoyStr}
                   max={eventoActivo?.fecha || undefined}
                   className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-600 transition"
                   value={formGestion.plazo}
@@ -462,13 +523,13 @@ const DetalleEvento = () => {
                 <button
                   type="button"
                   onClick={() => setModalGestion({ abierto: false, modo: 'crear', gestionId: null })}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-[#3B0764] hover:bg-[#2E1065] text-white font-bold rounded-xl text-xs transition shadow-md shadow-purple-950/20"
+                  className="px-5 py-2 bg-[#3B0764] hover:bg-[#2E1065] text-white font-bold rounded-xl text-xs transition shadow-md shadow-purple-950/20 cursor-pointer"
                 >
                   Guardar
                 </button>

@@ -46,8 +46,30 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  // Obtener el nombre para mostrar (prioriza Nombre + Apellido)
+  const getUserDisplayName = () => {
+    if (!user) return '';
+    const firstName = user.first_name || user.firstName || '';
+    const lastName = user.last_name || user.lastName || '';
+    const fullName = `${firstName} ${lastName}`.trim();
+    
+    if (fullName) return fullName;
+    if (user.fullName) return user.fullName;
+    if (user.name) return user.name;
+    return user.username || user.email || 'Usuario';
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, isAuthenticated: !!token, loading }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      token, 
+      login, 
+      register, 
+      logout, 
+      isAuthenticated: !!token, 
+      loading,
+      userDisplayName: getUserDisplayName()
+    }}>
       {!loading && children}
     </AuthContext.Provider>
   );

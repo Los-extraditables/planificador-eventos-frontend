@@ -8,12 +8,26 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 15000, // Timeout de 15s para evitar cuelgues
 });
 
-// Interceptor para enviar el Token en cada petición
+// Función auxiliar para obtener el token almacenado
+const getToken = () => {
+  return localStorage.getItem('token') || sessionStorage.getItem('token');
+};
+
+// Función para limpiar la sesión guardada
+export const clearAuthSession = () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  sessionStorage.removeItem('token');
+  sessionStorage.removeItem('user');
+};
+
+// Interceptor de Solicitud (Request): Adjunta el JWT Token en las cabeceras
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token'); // O la clave donde guardes tu JWT
+    const token = getToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -22,17 +36,29 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Interceptor para capturar errores de autenticación (401)
+// Interceptor de Respuesta (Response): Manejo centralizado de expiración y errores
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
-      // Si el token expiró o es inválido, limpiar sesión y redirigir
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+    const status = error.response?.status;
+    const currentPath = window.location.pathname;
+
+    // Redirigir a login si el token expiró o es inválido (401 o 403)
+    if ((status === 401 || status === 403) && !['/login', '/registro'].includes(currentPath)) {
+      console.warn('Sesión caducada o no autorizada. Redirigiendo a Login...');
+      clearAuthSession();
       window.location.href = '/login';
+      return Promise.reject(new Error('Sesión expirada. Por favor, inicia sesión nuevamente.'));
     }
-    return Promise.reject(error);
+
+    // Formatear mensaje de error proveniente del servidor
+    const mensajeError =
+      error.response?.data?.detail ||
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      'Error al procesar la solicitud con el servidor.';
+
+    return Promise.reject(new Error(mensajeError));
   }
 );
 
