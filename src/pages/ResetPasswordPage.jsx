@@ -5,9 +5,9 @@ const ResetPasswordPage = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // Capturamos los parámetros uid y token que vienen en la URL
-  const uid = searchParams.get('uid');
-  const token = searchParams.get('token');
+  // Capturamos los parámetros de la URL
+  const rawUid = searchParams.get('uid');
+  const rawToken = searchParams.get('token');
 
   const [nuevaPassword, setNuevaPassword] = useState('');
   const [confirmarPassword, setConfirmarPassword] = useState('');
@@ -17,7 +17,7 @@ const ResetPasswordPage = () => {
   const rawApiUrl = import.meta.env.VITE_API_URL || 'https://planificador-eventos-backend.onrender.com/api';
   const API_URL = rawApiUrl.endsWith('/') ? rawApiUrl.slice(0, -1) : rawApiUrl;
 
-  if (!uid || !token) {
+  if (!rawUid || !rawToken) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4 font-sans">
         <div className="bg-white p-6 rounded-2xl shadow-xl max-w-md w-full text-center border border-slate-200">
@@ -54,12 +54,19 @@ const ResetPasswordPage = () => {
       setCargando(true);
       setMensaje({ tipo: '', texto: '' });
 
+      // Limpieza y decodificación de seguridad para uid y token
+      const cleanUid = decodeURIComponent(rawUid).trim();
+      const cleanToken = decodeURIComponent(rawToken).trim();
+
       const response = await fetch(`${API_URL}/auth/users/reset_password_confirm/`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify({
-          uid,
-          token,
+          uid: cleanUid,
+          token: cleanToken,
           new_password: nuevaPassword,
           re_new_password: confirmarPassword
         })
@@ -67,7 +74,17 @@ const ResetPasswordPage = () => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || errorData.non_field_errors?.[0] || 'Error al restablecer la contraseña. El enlace puede haber expirado.');
+        
+        // Captura detallada de la respuesta de error de Django/Djoser
+        const errorMsg = 
+          errorData.detail || 
+          errorData.token?.[0] || 
+          errorData.uid?.[0] || 
+          errorData.new_password?.[0] || 
+          errorData.non_field_errors?.[0] || 
+          'Error al restablecer la contraseña. El enlace puede haber caducado.';
+          
+        throw new Error(errorMsg);
       }
 
       setMensaje({ tipo: 'exito', texto: '¡Contraseña restablecida con éxito! Redirigiendo al login...' });
