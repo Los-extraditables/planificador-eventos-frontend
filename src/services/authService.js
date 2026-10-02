@@ -72,11 +72,27 @@ export const authService = {
       password_confirmation: userData.password,
     };
 
-    return await safeFetch(`${API_URL}/register/`, {
+    const registerResult = await safeFetch(`${API_URL}/register/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
+
+    // Iniciar sesión tras registro exitoso para sincronizar el perfil con el nombre
+    try {
+      await authService.login(userData.email, userData.password);
+    } catch {
+      // Si falla el auto-login por token, guardamos el perfil localmente con sus datos
+      const localUser = {
+        email: userData.email,
+        username: userData.email,
+        first_name: userData.first_name || '',
+        last_name: userData.last_name || ''
+      };
+      localStorage.setItem('user', JSON.stringify(localUser));
+    }
+
+    return registerResult;
   },
 
   // 3. Obtener Perfil (GET /api/users/profile/)

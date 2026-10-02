@@ -31,12 +31,13 @@ export const AuthProvider = ({ children }) => {
   // Función para registrar usuario
   const register = async (userData) => {
     const data = await authService.register(userData);
-    // Intenta iniciar sesión automáticamente después del registro
-    try {
-      return await login(userData.email, userData.password);
-    } catch {
-      return data;
+    const currentUser = authService.getCurrentUser();
+    
+    if (currentUser) {
+      setUser(currentUser);
+      setToken(authService.getToken());
     }
+    return data;
   };
 
   // Función para salir
@@ -49,6 +50,7 @@ export const AuthProvider = ({ children }) => {
   // Obtener el nombre para mostrar (prioriza Nombre + Apellido)
   const getUserDisplayName = () => {
     if (!user) return '';
+    
     const firstName = user.first_name || user.firstName || '';
     const lastName = user.last_name || user.lastName || '';
     const fullName = `${firstName} ${lastName}`.trim();
@@ -56,7 +58,13 @@ export const AuthProvider = ({ children }) => {
     if (fullName) return fullName;
     if (user.fullName) return user.fullName;
     if (user.name) return user.name;
-    return user.username || user.email || 'Usuario';
+    
+    // Si la parte inicial del usuario no es un email directo
+    if (user.username && !user.username.includes('@')) {
+      return user.username;
+    }
+    
+    return user.email || user.username || 'Usuario';
   };
 
   return (

@@ -177,15 +177,27 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
   const day = String(hoyLocal.getDate()).padStart(2, '0');
   const hoyStr = `${year}-${month}-${day}`;
 
-  const esParaHoy = (gestion) => {
-    const fechaValor = gestion.plazo || gestion.fecha;
+  // Clasificación por Fechas
+  const gestionesAtrasadas = gestionesFiltradas.filter((g) => {
+    const fechaValor = g.plazo || g.fecha;
+    if (!fechaValor) return false;
+    const fechaLimpia = fechaValor.toString().split('T')[0].split(' ')[0];
+    return fechaLimpia < hoyStr && !g.completada;
+  });
+
+  const gestionesHoy = gestionesFiltradas.filter((g) => {
+    const fechaValor = g.plazo || g.fecha;
     if (!fechaValor) return true;
     const fechaLimpia = fechaValor.toString().split('T')[0].split(' ')[0];
-    return fechaLimpia <= hoyStr;
-  };
+    return fechaLimpia === hoyStr || (fechaLimpia < hoyStr && g.completada);
+  });
 
-  const gestionesHoy = gestionesFiltradas.filter((g) => esParaHoy(g));
-  const gestionesProximas = gestionesFiltradas.filter((g) => !esParaHoy(g));
+  const gestionesProximas = gestionesFiltradas.filter((g) => {
+    const fechaValor = g.plazo || g.fecha;
+    if (!fechaValor) return false;
+    const fechaLimpia = fechaValor.toString().split('T')[0].split(' ')[0];
+    return fechaLimpia > hoyStr;
+  });
 
   const horasTotalesHoy = gestionesHoy.reduce((acc, g) => {
     const hrs = parseFloat(g.horas_estimadas) || 0;
@@ -235,10 +247,9 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
 
       {cargando && <p className="text-sm text-slate-500">⏳ Cargando panel...</p>}
 
-      {/* ESTADO DE ERROR (Exactamente como en el Figma) */}
+      {/* ESTADO DE ERROR */}
       {error && !cargando && (
         <div className="flex flex-col items-center justify-center text-center py-16 px-4">
-          {/* Icono redondeado rosa/rojo suave con wifi tachado */}
           <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mb-6 text-red-400">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 5.636a9 9 0 010 12.728m-2.829-2.829a5 5 0 010-7.07 1 1 0 011.414-1.414 7 7 0 010 9.9 1 1 0 01-1.414-1.414M12 12a2 2 0 100-4 2 2 0 000 4z" />
@@ -296,7 +307,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
             </div>
 
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 text-xl flex-shrink-0">
+              <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 text-xl flex-shrink-0">
                 ⏱
               </div>
               <div>
@@ -376,6 +387,21 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
             </div>
           </div>
 
+          {/* Banner Informativo (Actividades de hoy) */}
+          <div className="space-y-3">
+            <h2 className="text-xl font-extrabold text-[#0F172A] tracking-tight">
+              Actividades de hoy
+            </h2>
+            <div className="bg-[#E6F7F8] border border-[#A7ECEE] rounded-2xl p-4 flex items-start gap-3 text-[#0D6E72] text-sm leading-relaxed">
+              <div className="w-5 h-5 rounded-full border border-[#0D6E72] flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5">
+                ?
+              </div>
+              <p>
+                Tus tareas se agrupan por urgencia. Dentro de cada grupo, verás primero las más antiguas; si coinciden en fecha, te sugerimos iniciar por la que tome menos tiempo.
+              </p>
+            </div>
+          </div>
+
           {/* Listado de Tareas clasificado */}
           {gestionesFiltradas.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center space-y-4 bg-white border border-slate-200 rounded-2xl">
@@ -403,9 +429,36 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
             </div>
           ) : (
             <div className="space-y-6">
-              <h2 className="text-xl font-extrabold text-[#0F172A]">Actividades</h2>
-
               <div className="space-y-8">
+                {/* SECCIÓN 0: ATRASADAS / VENCIDAS */}
+                {gestionesAtrasadas.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span>
+                      <span className="text-xs font-bold tracking-wider text-red-700 uppercase">
+                        ATRASADAS
+                      </span>
+                      <span className="bg-red-100 text-red-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                        {gestionesAtrasadas.length}
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {gestionesAtrasadas.map((gestion) => (
+                        <TarjetaGestion
+                          key={gestion.id}
+                          gestion={gestion}
+                          solicitarCompletar={solicitarCompletar}
+                          handleVerDetalle={handleVerDetalle}
+                          etiqueta="Atrasada"
+                          colorTag="bg-red-100 text-red-700 border border-red-200"
+                          esAtrasada={true}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* SECCIÓN 1: PARA HOY */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
@@ -438,14 +491,14 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
                   )}
                 </div>
 
-                {/* SECCIÓN 2: PRÓXIMAS */}
+                {/* SECCIÓN 2: PRÓXIMAS (EN GRIS) */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block"></span>
-                    <span className="text-xs font-bold tracking-wider text-purple-700 uppercase">
+                    <span className="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block"></span>
+                    <span className="text-xs font-bold tracking-wider text-slate-600 uppercase">
                       PRÓXIMAS
                     </span>
-                    <span className="bg-purple-100 text-purple-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    <span className="bg-slate-200 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
                       {gestionesProximas.length}
                     </span>
                   </div>
@@ -463,7 +516,8 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
                           solicitarCompletar={solicitarCompletar}
                           handleVerDetalle={handleVerDetalle}
                           etiqueta="Próxima"
-                          colorTag="bg-purple-50 text-purple-700"
+                          colorTag="bg-slate-100 text-slate-600"
+                          esProxima={true}
                         />
                       ))}
                     </div>
@@ -509,16 +563,21 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
   );
 };
 
-const TarjetaGestion = ({ gestion, solicitarCompletar, handleVerDetalle, etiqueta, colorTag }) => {
+const TarjetaGestion = ({ gestion, solicitarCompletar, handleVerDetalle, etiqueta, colorTag, esAtrasada, esProxima }) => {
   const fechaMostrar = gestion.plazo || gestion.fecha;
+
+  let borderStyle = 'border-l-teal-500';
+  if (gestion.completada) {
+    borderStyle = 'border-l-emerald-500 opacity-80';
+  } else if (esAtrasada) {
+    borderStyle = 'border-l-red-500';
+  } else if (esProxima) {
+    borderStyle = 'border-l-slate-400';
+  }
 
   return (
     <div
-      className={`bg-white border rounded-2xl p-4 shadow-sm flex items-center justify-between transition border-l-4 ${
-        gestion.completada
-          ? 'border-l-emerald-500 opacity-80 border-slate-200'
-          : 'border-l-teal-500 border-slate-200 hover:shadow-md'
-      }`}
+      className={`bg-white border rounded-2xl p-4 shadow-sm flex items-center justify-between transition border-l-4 ${borderStyle} border-slate-200 hover:shadow-md`}
     >
       <div className="flex items-center gap-4">
         <input

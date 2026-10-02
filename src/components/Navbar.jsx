@@ -10,18 +10,15 @@ const Navbar = () => {
   // Obtener exclusivamente el nombre de usuario o nombre de pila (NUNCA el correo)
   const obtenerNombreMostrado = () => {
     if (user) {
-      if (user.first_name && user.first_name.trim() !== '') {
-        return user.first_name;
-      }
-      if (user.username && !user.username.includes('@')) {
-        return user.username;
-      }
-      if (user.name && !user.name.includes('@')) {
-        return user.name;
-      }
-      if (user.fullName && !user.fullName.includes('@')) {
-        return user.fullName.split(' ')[0];
-      }
+      const firstName = user.first_name || user.firstName || '';
+      const lastName = user.last_name || user.lastName || '';
+      const fullName = `${firstName} ${lastName}`.trim();
+      
+      if (fullName) return fullName;
+      if (user.first_name && user.first_name.trim() !== '') return user.first_name;
+      if (user.fullName && !user.fullName.includes('@')) return user.fullName;
+      if (user.name && !user.name.includes('@')) return user.name;
+      if (user.username && !user.username.includes('@')) return user.username;
     }
 
     if (userDisplayName && !userDisplayName.includes('@')) {
@@ -48,9 +45,10 @@ const Navbar = () => {
         <div style={styles.brand}>
           <div style={styles.logoIcon}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-  ...
-                </svg>
-            
+              <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M2 17L12 22L22 17" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M2 12L12 17L22 12" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
           </div>
           <span style={styles.brandName}>Evora</span>
         </div>
