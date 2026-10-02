@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
@@ -17,6 +17,30 @@ import CrearEvento from './pages/CrearEvento';
 import DetalleEvento from './pages/DetalleEvento';
 import Progreso from './pages/Progreso';
 
+// Wrapper para conectar Hoy.jsx con la navegación de React Router
+const HoyWrapper = () => {
+  const navigate = useNavigate();
+
+  const handleCrearEvento = () => {
+    navigate('/crear');
+  };
+
+  const handleVerDetalle = (tipo, id) => {
+    if (id) {
+      navigate(`/detalle-evento/${id}`);
+    } else {
+      navigate('/detalle-evento');
+    }
+  };
+
+  return (
+    <Hoy 
+      onCrearEvento={handleCrearEvento} 
+      onVerDetalle={handleVerDetalle} 
+    />
+  );
+};
+
 function App() {
   return (
     <AuthProvider>
@@ -32,9 +56,9 @@ function App() {
           {/* 2. RUTAS PRIVADAS PROTEGIDAS */}
           <Route element={<ProtectedRoute />}>
             <Route element={<MainLayout />}>
-              <Route path="/hoy" element={<Hoy />} />
+              <Route path="/hoy" element={<HoyWrapper />} />
               <Route path="/crear" element={<CrearEvento />} />
-              {/* Se agrega ? a :id? para permitir entrar con o sin ID en la URL */}
+              {/* Se permite entrar con o sin ID en la URL */}
               <Route path="/detalle-evento/:id?" element={<DetalleEvento />} />
               <Route path="/progreso" element={<Progreso />} />
             </Route>

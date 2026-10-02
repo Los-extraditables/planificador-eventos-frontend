@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 
-const Hoy = ({ onVerDetalle }) => {
+const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
   const navigate = useNavigate();
   const [eventos, setEventos] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -106,16 +106,24 @@ const Hoy = ({ onVerDetalle }) => {
     }
   };
 
-  // --- REDIRECCIÓN AL DETALLE CORREGIDA ---
   const handleVerDetalle = (eventoId) => {
     if (!eventoId) return;
 
-    // Si la app maneja pestañas desde el componente Padre (Dashboard)
     if (typeof onVerDetalle === 'function') {
       onVerDetalle('detalle', eventoId);
     } else {
-      // Si la app usa React Router puro
       navigate(`/detalle-evento/${eventoId}`);
+    }
+  };
+
+  // --- REDIRECCIÓN A CREAR EVENTO COMPATIBLE CON PESTAÑAS O RUTAS ---
+  const handleIrACrear = () => {
+    if (typeof onCrearEvento === 'function') {
+      onCrearEvento('crear');
+    } else if (typeof setPestanaActiva === 'function') {
+      setPestanaActiva('crear');
+    } else {
+      navigate('/crear-evento');
     }
   };
 
@@ -168,7 +176,7 @@ const Hoy = ({ onVerDetalle }) => {
   });
 
   return (
-    <div className="p-6 md:p-10 max-w-6xl mx-auto space-y-8 bg-slate-50/50 min-h-screen text-slate-800">
+    <div className="p-6 md:p-10 max-w-6xl mx-auto space-y-8 bg-slate-50/50 min-h-screen text-slate-800 text-left">
       
       {/* Mensajes Flotantes */}
       {mensaje.texto && (
@@ -195,149 +203,178 @@ const Hoy = ({ onVerDetalle }) => {
         </p>
       </div>
 
-      {/* Métricas Superiores */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-teal-50 flex items-center justify-center text-teal-600 text-xl">
+      {cargando && <p className="text-sm text-slate-500">⏳ Cargando panel...</p>}
+
+      {error && (
+        <div className="p-4 text-red-600 bg-red-50 rounded-xl text-sm border border-red-100">
+          ⚠️ {error}
+        </div>
+      )}
+
+      {!cargando && !error && gestionesPendientes.length === 0 ? (
+        /* ESTADO VACÍO (FIGMA) CUANDO NO HAY GESTIONES PENDIENTES */
+        <div className="flex flex-col items-center justify-center pt-16 pb-20 text-center space-y-4">
+          <div className="w-16 h-16 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-900 text-2xl shadow-sm border border-purple-100/50">
             📅
           </div>
-          <div>
-            <span className="text-2xl font-bold text-slate-900 block leading-none mb-1">
-              {eventos.length}
-            </span>
-            <span className="text-xs text-slate-500 font-medium">Eventos activos</span>
+
+          <div className="space-y-1">
+            <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">
+              ¡Todo listo por hoy!
+            </h2>
+            <p className="text-sm text-slate-400 font-medium">
+              No tienes gestiones urgentes hoy.
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={handleIrACrear}
+              className="px-5 py-2.5 bg-[#3B0764] hover:bg-[#2E1065] text-white font-semibold rounded-xl text-sm transition shadow-md shadow-purple-950/20 inline-flex items-center gap-2 cursor-pointer"
+            >
+              <span>+</span>
+              <span>Crear un evento</span>
+            </button>
           </div>
         </div>
+      ) : (!cargando && !error && (
+        <>
+          {/* Métricas Superiores */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-teal-50 flex items-center justify-center text-teal-600 text-xl">
+                📅
+              </div>
+              <div>
+                <span className="text-2xl font-bold text-slate-900 block leading-none mb-1">
+                  {eventos.length}
+                </span>
+                <span className="text-xs text-slate-500 font-medium">Eventos activos</span>
+              </div>
+            </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 text-xl">
-            📋
-          </div>
-          <div>
-            <span className="text-2xl font-bold text-slate-900 block leading-none mb-1">
-              {gestionesHoy.length}
-            </span>
-            <span className="text-xs text-slate-500 font-medium">Gestiones para hoy</span>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 text-xl">
-            ⏱
-          </div>
-          <div>
-            <span className="text-2xl font-bold text-slate-900 block leading-none mb-1">
-              {gestionesProximas.length}
-            </span>
-            <span className="text-xs text-slate-500 font-medium">Gestiones próximas</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Tarjeta de Carga de Gestión */}
-      <div className="bg-white border-2 border-amber-400 rounded-2xl p-5 shadow-sm space-y-3">
-        <div className="flex items-center justify-between text-amber-800 font-bold text-sm">
-          <div className="flex items-center gap-2">
-            <span>Carga de gestión (Hoy)</span>
-            <span>⚠</span>
-          </div>
-          <span>{horasTotalesHoy.toFixed(1)} / {limiteDiarioMax.toFixed(1)} h</span>
-        </div>
-
-        <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-          <div 
-            className="bg-amber-500 h-2.5 rounded-full transition-all duration-500" 
-            style={{ width: `${porcentajeCarga}%` }}
-          ></div>
-        </div>
-
-        <div className="flex items-center justify-between text-xs pt-1">
-          <span className="text-amber-700 font-medium">
-            {horasTotalesHoy > limiteDiarioMax 
-              ? 'Advertencia de agenda: Has excedido la cuota recomendada.'
-              : 'Tu carga de agenda se encuentra dentro del rango adecuado.'}
-          </span>
-        </div>
-      </div>
-
-      {/* Listado de Tareas clasificado */}
-      <div className="space-y-6">
-        <h2 className="text-xl font-extrabold text-[#0F172A]">Actividades</h2>
-
-        {cargando && <p className="text-sm text-slate-500">⏳ Cargando gestiones...</p>}
-
-        {error && (
-          <div className="p-4 text-red-600 bg-red-50 rounded-xl text-sm border border-red-100">
-            ⚠️ {error}
-          </div>
-        )}
-
-        {!cargando && !error && (
-          <div className="space-y-8">
-            
-            {/* SECCIÓN 1: PARA HOY */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-teal-500 inline-block"></span>
-                <span className="text-xs font-bold tracking-wider text-teal-700 uppercase">PARA HOY</span>
-                <span className="bg-teal-100 text-teal-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 text-xl">
+                📋
+              </div>
+              <div>
+                <span className="text-2xl font-bold text-slate-900 block leading-none mb-1">
                   {gestionesHoy.length}
                 </span>
+                <span className="text-xs text-slate-500 font-medium">Gestiones para hoy</span>
               </div>
-
-              {gestionesHoy.length === 0 ? (
-                <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center text-slate-500 text-sm">
-                  🎉 ¡No tienes gestiones pendientes para hoy!
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {gestionesHoy.map((gestion) => (
-                    <TarjetaGestion 
-                      key={gestion.id} 
-                      gestion={gestion} 
-                      solicitarCompletar={solicitarCompletar} 
-                      handleVerDetalle={handleVerDetalle} 
-                      etiqueta="Para hoy"
-                      colorTag="bg-teal-50 text-teal-700"
-                    />
-                  ))}
-                </div>
-              )}
             </div>
 
-            {/* SECCIÓN 2: PRÓXIMAS */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block"></span>
-                <span className="text-xs font-bold tracking-wider text-purple-700 uppercase">PRÓXIMAS</span>
-                <span className="bg-purple-100 text-purple-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 text-xl">
+                ⏱
+              </div>
+              <div>
+                <span className="text-2xl font-bold text-slate-900 block leading-none mb-1">
                   {gestionesProximas.length}
                 </span>
+                <span className="text-xs text-slate-500 font-medium">Gestiones próximas</span>
               </div>
+            </div>
+          </div>
 
-              {gestionesProximas.length === 0 ? (
-                <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center text-slate-500 text-sm">
-                  No hay gestiones programadas para días posteriores.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {gestionesProximas.map((gestion) => (
-                    <TarjetaGestion 
-                      key={gestion.id} 
-                      gestion={gestion} 
-                      solicitarCompletar={solicitarCompletar} 
-                      handleVerDetalle={handleVerDetalle} 
-                      etiqueta="Próxima"
-                      colorTag="bg-purple-50 text-purple-700"
-                    />
-                  ))}
-                </div>
-              )}
+          {/* Tarjeta de Carga de Gestión */}
+          <div className="bg-white border-2 border-amber-400 rounded-2xl p-5 shadow-sm space-y-3">
+            <div className="flex items-center justify-between text-amber-800 font-bold text-sm">
+              <div className="flex items-center gap-2">
+                <span>Carga de gestión (Hoy)</span>
+                <span>⚠</span>
+              </div>
+              <span>{horasTotalesHoy.toFixed(1)} / {limiteDiarioMax.toFixed(1)} h</span>
             </div>
 
+            <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+              <div 
+                className="bg-amber-500 h-2.5 rounded-full transition-all duration-500" 
+                style={{ width: `${porcentajeCarga}%` }}
+              ></div>
+            </div>
+
+            <div className="flex items-center justify-between text-xs pt-1">
+              <span className="text-amber-700 font-medium">
+                {horasTotalesHoy > limiteDiarioMax 
+                  ? 'Advertencia de agenda: Has excedido la cuota recomendada.'
+                  : 'Tu carga de agenda se encuentra dentro del rango adecuado.'}
+              </span>
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* Listado de Tareas clasificado */}
+          <div className="space-y-6">
+            <h2 className="text-xl font-extrabold text-[#0F172A]">Actividades</h2>
+
+            <div className="space-y-8">
+              
+              {/* SECCIÓN 1: PARA HOY */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-teal-500 inline-block"></span>
+                  <span className="text-xs font-bold tracking-wider text-teal-700 uppercase">PARA HOY</span>
+                  <span className="bg-teal-100 text-teal-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    {gestionesHoy.length}
+                  </span>
+                </div>
+
+                {gestionesHoy.length === 0 ? (
+                  <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center text-slate-500 text-sm">
+                    🎉 ¡No tienes gestiones pendientes para hoy!
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {gestionesHoy.map((gestion) => (
+                      <TarjetaGestion 
+                        key={gestion.id} 
+                        gestion={gestion} 
+                        solicitarCompletar={solicitarCompletar} 
+                        handleVerDetalle={handleVerDetalle} 
+                        etiqueta="Para hoy"
+                        colorTag="bg-teal-50 text-teal-700"
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* SECCIÓN 2: PRÓXIMAS */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block"></span>
+                  <span className="text-xs font-bold tracking-wider text-purple-700 uppercase">PRÓXIMAS</span>
+                  <span className="bg-purple-100 text-purple-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    {gestionesProximas.length}
+                  </span>
+                </div>
+
+                {gestionesProximas.length === 0 ? (
+                  <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center text-slate-500 text-sm">
+                    No hay gestiones programadas para días posteriores.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {gestionesProximas.map((gestion) => (
+                      <TarjetaGestion 
+                        key={gestion.id} 
+                        gestion={gestion} 
+                        solicitarCompletar={solicitarCompletar} 
+                        handleVerDetalle={handleVerDetalle} 
+                        etiqueta="Próxima"
+                        colorTag="bg-purple-50 text-purple-700"
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+            </div>
+          </div>
+        </>
+      ))}
 
       {/* Modal de Confirmación */}
       {confirmModal.abierto && (

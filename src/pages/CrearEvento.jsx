@@ -6,10 +6,8 @@ const CrearEvento = ({ onEventoCreado }) => {
   const navigate = useNavigate();
   const API_URL = import.meta.env.VITE_API_URL || 'https://planificador-eventos-backend.onrender.com/api';
 
-  // Fecha de hoy en formato YYYY-MM-DD para validar mínimos
   const hoyStr = new Date().toISOString().split('T')[0];
 
-  // Datos Generales del Evento
   const [formEvento, setFormEvento] = useState({
     nombre: '',
     tipo: '',
@@ -17,13 +15,13 @@ const CrearEvento = ({ onEventoCreado }) => {
     limite_diario_horas: ''
   });
 
-  // Plan Logístico Inicial (Array de subtareas)
   const [gestiones, setGestiones] = useState([
     { id: Date.now(), descripcion: '', plazo: '', horas_estimadas: '' }
   ]);
 
   const [cargando, setCargando] = useState(false);
   const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
+  const [errores, setErrores] = useState({});
 
   const handleSesionExpirada = () => {
     authService.logout();
@@ -35,7 +33,6 @@ const CrearEvento = ({ onEventoCreado }) => {
     setTimeout(() => setMensaje({ tipo: '', texto: '' }), 5000);
   };
 
-  // Manejo de Subtareas / Gestiones
   const handleGestionChange = (id, field, value) => {
     setGestiones(gestiones.map(g => g.id === id ? { ...g, [field]: value } : g));
   };
@@ -51,22 +48,43 @@ const CrearEvento = ({ onEventoCreado }) => {
     setGestiones(gestiones.filter(g => g.id !== id));
   };
 
-  // Envío del Formulario
+  const validarFormulario = () => {
+    const nuevosErrores = {};
+
+    if (!formEvento.nombre.trim()) {
+      nuevosErrores.nombre = 'Este campo es obligatorio.';
+    }
+
+    if (!formEvento.tipo) {
+      nuevosErrores.tipo = 'Selecciona un tipo.';
+    }
+
+    if (!formEvento.fecha) {
+      nuevosErrores.fecha = 'Este campo es obligatorio.';
+    } else if (formEvento.fecha < hoyStr) {
+      nuevosErrores.fecha = 'La fecha no puede ser anterior a hoy.';
+    }
+
+    if (
+      formEvento.limite_diario_horas === '' || 
+      isNaN(formEvento.limite_diario_horas) || 
+      parseFloat(formEvento.limite_diario_horas) < 0
+    ) {
+      nuevosErrores.limite_diario_horas = 'Ingresa un número válido mayor o igual a 0.';
+    }
+
+    setErrores(nuevosErrores);
+    return Object.keys(nuevosErrores).length === 0;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formEvento.nombre.trim() || !formEvento.tipo || !formEvento.fecha) {
-      mostrarMensaje('error', 'Por favor completa todos los campos requeridos del evento.');
+    if (!validarFormulario()) {
+      mostrarMensaje('error', 'Por favor completa los campos requeridos antes de guardar.');
       return;
     }
 
-    // --- VALIDACIÓN 1: Fecha del evento no puede ser anterior a hoy ---
-    if (formEvento.fecha < hoyStr) {
-      mostrarMensaje('error', 'La fecha del evento no puede ser anterior al día de hoy.');
-      return;
-    }
-
-    // --- VALIDACIÓN 2: Fechas de las gestiones deben estar entre hoy y la fecha del evento ---
     for (let i = 0; i < gestiones.length; i++) {
       const g = gestiones[i];
       if (g.descripcion.trim()) {
@@ -95,7 +113,6 @@ const CrearEvento = ({ onEventoCreado }) => {
     try {
       const baseUrl = API_URL.endsWith('/') ? API_URL : `${API_URL}/`;
 
-      // Filtrar y limpiar gestiones para evitar objetos incompletos
       const gestionesValidas = gestiones
         .filter(g => g.descripcion && g.descripcion.trim() !== '')
         .map(g => ({
@@ -122,7 +139,6 @@ const CrearEvento = ({ onEventoCreado }) => {
         body: JSON.stringify(payload)
       });
 
-      // Manejo de Error 401 o 403 (Sesión Expirada o no autorizada)
       if (resEvento.status === 401 || resEvento.status === 403) {
         handleSesionExpirada();
         return;
@@ -147,9 +163,9 @@ const CrearEvento = ({ onEventoCreado }) => {
 
       mostrarMensaje('exito', '¡Evento y plan inicial creados con éxito!');
 
-      // Resetear formulario
       setFormEvento({ nombre: '', tipo: '', fecha: '', limite_diario_horas: '' });
       setGestiones([{ id: Date.now(), descripcion: '', plazo: '', horas_estimadas: '' }]);
+      setErrores({});
 
       if (onEventoCreado) onEventoCreado();
 
@@ -164,104 +180,142 @@ const CrearEvento = ({ onEventoCreado }) => {
     <div className="max-w-4xl mx-auto p-6 font-sans text-slate-800 text-left">
       
       {/* Encabezado Principal */}
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">
           Crear Nuevo Evento y Plan Inicial
         </h1>
         <p className="text-sm text-slate-500">
-          Registra los datos generales de tu evento y el desglose opcional de gestiones logísticas.
+          Registra los datos generales de tu evento y desglose de subtareas logísticas.
         </p>
       </div>
 
-      {/* Alerta de Mensajes */}
+      {/* Alerta de Mensajes / Errores estilo Figma */}
       {mensaje.texto && (
-        <div className={`p-4 rounded-xl mb-6 text-xs font-semibold ${
+        <div className={`p-4 rounded-2xl mb-6 text-sm font-semibold flex items-center gap-3 ${
           mensaje.tipo === 'exito' 
             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-            : 'bg-red-50 text-red-600 border border-red-200'
+            : 'bg-red-50/80 text-red-700 border border-red-200/80'
         }`}>
-          {mensaje.texto}
+          {mensaje.tipo === 'error' && (
+            <span className="flex items-center justify-center w-6 h-6 rounded-full border-2 border-red-500 text-red-500 text-xs font-bold shrink-0">
+              !
+            </span>
+          )}
+          <span>{mensaje.texto}</span>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} noValidate className="space-y-6">
         
         {/* BLOQUE 1: Datos del Evento */}
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-slate-900 mb-4 pb-2 border-b border-slate-100">
-            Datos Generales del Evento
+          <h2 className="text-lg font-bold text-slate-900 mb-6 pb-2">
+            Datos del Evento
           </h2>
 
           <div className="mb-5">
-            <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">
+            <label className="block text-xs font-bold text-slate-700 mb-2">
               Nombre del Evento <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
-              required
-              placeholder="Ej. Lanzamiento de Producto 2026"
-              className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent transition"
+              placeholder="Ej. Lanzamiento Producto X"
+              className={`w-full px-4 py-3 rounded-xl text-sm transition focus:outline-none ${
+                errores.nombre 
+                  ? 'bg-red-50/50 border border-red-400 text-red-900 placeholder-slate-400 focus:ring-2 focus:ring-red-400' 
+                  : 'border border-slate-300 text-slate-800 focus:ring-2 focus:ring-purple-600'
+              }`}
               value={formEvento.nombre}
-              onChange={(e) => setFormEvento({ ...formEvento, nombre: e.target.value })}
+              onChange={(e) => {
+                setFormEvento({ ...formEvento, nombre: e.target.value });
+                if (errores.nombre) setErrores({ ...errores, nombre: null });
+              }}
             />
+            {errores.nombre && (
+              <p className="text-xs text-red-500 mt-1.5 font-medium">{errores.nombre}</p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">
-                Tipo de Evento <span className="text-red-500">*</span>
+              <label className="block text-xs font-bold text-slate-700 mb-2">
+                Tipo <span className="text-red-500">*</span>
               </label>
               <select
-                required
-                className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent transition cursor-pointer"
+                className={`w-full px-4 py-3 rounded-xl text-sm transition focus:outline-none cursor-pointer ${
+                  errores.tipo 
+                    ? 'bg-red-50/50 border border-red-400 text-slate-400 focus:ring-2 focus:ring-red-400' 
+                    : 'bg-white border border-slate-300 text-slate-800 focus:ring-2 focus:ring-purple-600'
+                }`}
                 value={formEvento.tipo}
-                onChange={(e) => setFormEvento({ ...formEvento, tipo: e.target.value })}
+                onChange={(e) => {
+                  setFormEvento({ ...formEvento, tipo: e.target.value });
+                  if (errores.tipo) setErrores({ ...errores, tipo: null });
+                }}
               >
-                <option value="">Selecciona una categoría</option>
+                <option value="">Selecciona el tipo de evento</option>
                 <option value="Corporativo">Corporativo</option>
                 <option value="Social">Social</option>
                 <option value="Academico">Académico</option>
                 <option value="Otro">Otro</option>
               </select>
+              {errores.tipo && (
+                <p className="text-xs text-red-500 mt-1.5 font-medium">{errores.tipo}</p>
+              )}
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">
-                Fecha Límite del Evento <span className="text-red-500">*</span>
+              <label className="block text-xs font-bold text-slate-700 mb-2">
+                Fecha límite del Evento <span className="text-red-500">*</span>
               </label>
               <input
                 type="date"
-                required
                 min={hoyStr}
-                className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent transition"
+                className={`w-full px-4 py-3 rounded-xl text-sm transition focus:outline-none ${
+                  errores.fecha 
+                    ? 'bg-red-50/50 border border-red-400 text-slate-400 focus:ring-2 focus:ring-red-400' 
+                    : 'border border-slate-300 text-slate-800 focus:ring-2 focus:ring-purple-600'
+                }`}
                 value={formEvento.fecha}
-                onChange={(e) => setFormEvento({ ...formEvento, fecha: e.target.value })}
+                onChange={(e) => {
+                  setFormEvento({ ...formEvento, fecha: e.target.value });
+                  if (errores.fecha) setErrores({ ...errores, fecha: null });
+                }}
               />
+              {errores.fecha && (
+                <p className="text-xs text-red-500 mt-1.5 font-medium">{errores.fecha}</p>
+              )}
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">
-              Límite Diario de Carga de Trabajo <span className="text-red-500">*</span>
+            <label className="block text-xs font-bold text-slate-700 mb-2">
+              Límite diario de carga de trabajo <span className="text-red-500">*</span>
             </label>
-            <div className="relative max-w-xs">
+            <div className="relative max-w-md">
               <input
                 type="number"
-                required
                 step="0.5"
-                min="0.5"
-                placeholder="Ej. 6.0"
-                className="w-full px-4 py-3 pr-16 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent transition"
+                min="0"
+                placeholder="Ej. 6"
+                className={`w-full px-4 py-3 pr-20 rounded-xl text-sm transition focus:outline-none ${
+                  errores.limite_diario_horas 
+                    ? 'bg-red-50/50 border border-red-400 text-red-900 placeholder-slate-400 focus:ring-2 focus:ring-red-400' 
+                    : 'border border-slate-300 text-slate-800 focus:ring-2 focus:ring-purple-600'
+                }`}
                 value={formEvento.limite_diario_horas}
-                onChange={(e) => setFormEvento({ ...formEvento, limite_diario_horas: e.target.value })}
+                onChange={(e) => {
+                  setFormEvento({ ...formEvento, limite_diario_horas: e.target.value });
+                  if (errores.limite_diario_horas) setErrores({ ...errores, limite_diario_horas: null });
+                }}
               />
-              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-semibold">
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-medium">
                 hrs/día
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-2">
-              ⓘ Límite diario recomendado para distribución de tareas: 6.0 horas.
-            </p>
+            {errores.limite_diario_horas && (
+              <p className="text-xs text-red-500 mt-1.5 font-medium">{errores.limite_diario_horas}</p>
+            )}
           </div>
         </div>
 
@@ -345,6 +399,7 @@ const CrearEvento = ({ onEventoCreado }) => {
             onClick={() => {
               setFormEvento({ nombre: '', tipo: '', fecha: '', limite_diario_horas: '' });
               setGestiones([{ id: Date.now(), descripcion: '', plazo: '', horas_estimadas: '' }]);
+              setErrores({});
             }}
             className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm transition"
           >
