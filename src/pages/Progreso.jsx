@@ -8,32 +8,50 @@ const Progreso = () => {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
 
-  const API_URL = import.meta.env.VITE_API_URL || 'https://planificador-eventos-backend.onrender.com/api';
+  const rawApiUrl = import.meta.env.VITE_API_URL || 'https://planificador-eventos-backend.onrender.com/api';
+  const API_URL = rawApiUrl.endsWith('/') ? rawApiUrl.slice(0, -1) : rawApiUrl;
 
-  const obtenerDatos = async () => {
-    try {
-      setCargando(true);
-      setError(null);
-      const token = authService.getToken();
-
-      const response = await fetch(`${API_URL}/eventos/`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) throw new Error('No se pudieron obtener los datos del progreso.');
-
-      const data = await response.json();
-      setEventos(data);
-    } catch (err) {
-      console.error(err);
-      setError(err.message);
-    } finally {
-      setCargando(false);
-    }
+  const handleSesionExpirada = () => {
+    authService.logout();
+    navigate('/login');
   };
+
+  const obtenerDatos = async (reintento = true) => {
+  try {
+    setCargando(true);
+    setError(null);
+    const token = authService.getToken();
+
+    if (!token) {
+      handleSesionExpirada();
+      return;
+    }
+
+    const response = await fetch(`${API_URL}/eventos/`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    // CAPTURA TANTO 401 COMO 403
+    if (response.status === 401 || response.status === 403) {
+      console.warn('Sesión no válida o caducada (Status 401/403). Redirigiendo a Login...');
+      handleSesionExpirada();
+      return;
+    }
+
+    if (!response.ok) throw new Error('No se pudieron obtener los datos del progreso.');
+
+    const data = await response.json();
+    setEventos(data);
+  } catch (err) {
+    console.error(err);
+    setError(err.message || 'Error de conexión con el servidor.');
+  } finally {
+    setCargando(false);
+  }
+};;
 
   useEffect(() => {
     obtenerDatos();
@@ -44,12 +62,19 @@ const Progreso = () => {
 
     try {
       const token = authService.getToken();
+      if (!token) return handleSesionExpirada();
+
       const response = await fetch(`${API_URL}/eventos/${id}/`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
+
+      if (response.status === 401) {
+        handleSesionExpirada();
+        return;
+      }
 
       if (!response.ok) throw new Error('Error al eliminar el evento.');
 
@@ -59,6 +84,11 @@ const Progreso = () => {
     }
   };
 
+  const handleVerDetalle = (eventoId) => {
+    if (!eventoId) return;
+    navigate(`/detalle-evento/${eventoId}`);
+  };
+
   // --- Cálculos de Métricas Globales ---
   const eventosActivosCount = eventos.length;
   
@@ -66,7 +96,7 @@ const Progreso = () => {
   let subtareasCompletadas = 0;
 
   const eventosCalculados = eventos.map(evento => {
-    const gestiones = evento.gestiones || [];
+    const gestiones = evento.gestiones || evento.gestiones_plan || [];
     const total = gestiones.length;
     const completadas = gestiones.filter(g => g.completada).length;
     const porcentaje = total > 0 ? Math.round((completadas / total) * 100) : 0;
@@ -125,8 +155,14 @@ const Progreso = () => {
       {cargando && <p className="text-sm text-slate-500">⏳ Cargando métricas de progreso...</p>}
 
       {error && (
-        <div className="p-4 text-red-600 bg-red-50 rounded-xl text-sm border border-red-100">
-          ⚠️ {error}
+        <div className="p-4 text-red-600 bg-red-50 rounded-xl text-sm border border-red-100 flex flex-col items-start gap-2">
+          <span>⚠️ {error}</span>
+          <button
+            onClick={() => obtenerDatos()}
+            className="px-3 py-1 bg-red-600 text-white text-xs font-semibold rounded-lg hover:bg-red-700 transition"
+          >
+            Reintentar
+          </button>
         </div>
       )}
 
@@ -216,14 +252,16 @@ const Progreso = () => {
 
                         <div className="flex items-center gap-3">
                           <button
-                            onClick={() => navigate(`/detalle-evento/${evento.id}`)}
-                            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1"
+                            type="button"
+                            onClick={() => handleVerDetalle(evento.id)}
+                            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1 cursor-pointer"
                           >
                             Ver Detalle <span className="text-xs">›</span>
                           </button>
                           <button
+                            type="button"
                             onClick={() => eliminarEvento(evento.id)}
-                            className="p-2 text-slate-300 hover:text-rose-600 transition text-sm"
+                            className="p-2 text-slate-300 hover:text-rose-600 transition text-sm cursor-pointer"
                             title="Eliminar evento"
                           >
                             🗑️

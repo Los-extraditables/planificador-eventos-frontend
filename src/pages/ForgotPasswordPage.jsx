@@ -13,11 +13,17 @@ export const ForgotPasswordPage = () => {
     setError('');
     setMessage('');
     setLoading(true);
+
     try {
       await authService.forgotPassword(email);
       setMessage('Se han enviado las instrucciones de recuperación a tu correo electrónico.');
     } catch (err) {
-      setError(err.message || 'No se pudo enviar el correo de recuperación.');
+      // Si el backend da error de timeout por SMTP, mostramos un mensaje descriptivo
+      const msjError = err.message?.includes('500') || err.message?.includes('servidor')
+        ? 'El backend no pudo enviar el correo (Falta configuración SMTP en el servidor).'
+        : err.message || 'No se pudo procesar la solicitud en este momento.';
+
+      setError(msjError);
     } finally {
       setLoading(false);
     }
@@ -62,7 +68,7 @@ export const ForgotPasswordPage = () => {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-[#3B0764] hover:bg-[#2E1065] text-white font-semibold py-3 rounded-xl text-sm transition shadow-lg shadow-purple-950/20 mt-2"
+          className="w-full bg-[#3B0764] hover:bg-[#2E1065] text-white font-semibold py-3 rounded-xl text-sm transition shadow-lg shadow-purple-950/20 mt-2 disabled:opacity-50"
         >
           {loading ? 'Enviando...' : 'Enviar enlace'}
         </button>

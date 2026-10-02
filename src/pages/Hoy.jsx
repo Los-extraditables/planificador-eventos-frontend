@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 
-const Hoy = () => {
+const Hoy = ({ onVerDetalle }) => {
   const navigate = useNavigate();
   const [eventos, setEventos] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -13,11 +13,22 @@ const Hoy = () => {
 
   const API_URL = import.meta.env.VITE_API_URL || 'https://planificador-eventos-backend.onrender.com/api';
 
+  const handleSesionExpirada = () => {
+    authService.logout();
+    navigate('/login');
+  };
+
   const obtenerEventos = async () => {
     try {
       setCargando(true);
       setError(null);
       const token = authService.getToken();
+
+      if (!token) {
+        handleSesionExpirada();
+        return;
+      }
+
       const baseUrl = API_URL.endsWith('/') ? API_URL : `${API_URL}/`;
 
       const response = await fetch(`${baseUrl}eventos/`, {
@@ -27,9 +38,8 @@ const Hoy = () => {
         }
       });
 
-      if (response.status === 401) {
-        authService.logout();
-        window.location.href = '/login';
+      if (response.status === 401 || response.status === 403) {
+        handleSesionExpirada();
         return;
       }
 
@@ -65,6 +75,12 @@ const Hoy = () => {
 
     try {
       const token = authService.getToken();
+
+      if (!token) {
+        handleSesionExpirada();
+        return;
+      }
+
       const baseUrl = API_URL.endsWith('/') ? API_URL : `${API_URL}/`;
 
       const response = await fetch(`${baseUrl}gestiones/${gestion.id}/`, {
@@ -76,9 +92,8 @@ const Hoy = () => {
         body: JSON.stringify({ completada: true })
       });
 
-      if (response.status === 401) {
-        authService.logout();
-        window.location.href = '/login';
+      if (response.status === 401 || response.status === 403) {
+        handleSesionExpirada();
         return;
       }
 
@@ -91,8 +106,15 @@ const Hoy = () => {
     }
   };
 
+  // --- REDIRECCIÓN AL DETALLE CORREGIDA ---
   const handleVerDetalle = (eventoId) => {
-    if (eventoId) {
+    if (!eventoId) return;
+
+    // Si la app maneja pestañas desde el componente Padre (Dashboard)
+    if (typeof onVerDetalle === 'function') {
+      onVerDetalle('detalle', eventoId);
+    } else {
+      // Si la app usa React Router puro
       navigate(`/detalle-evento/${eventoId}`);
     }
   };
@@ -381,8 +403,9 @@ const TarjetaGestion = ({ gestion, solicitarCompletar, handleVerDetalle, etiquet
       </div>
 
       <button 
+        type="button"
         onClick={() => handleVerDetalle(gestion.eventoId)}
-        className="p-2.5 text-slate-400 hover:text-purple-800 hover:bg-purple-50 rounded-xl transition text-lg"
+        className="p-2.5 text-slate-400 hover:text-purple-800 hover:bg-purple-50 rounded-xl transition text-lg cursor-pointer"
         title="Ver detalle del evento"
       >
         👁️

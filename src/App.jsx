@@ -22,19 +22,20 @@ function App() {
     <AuthProvider>
       <Router>
         <Routes>
-          {/* 1. RUTAS PÚBLICAS (Login, Registro, Recuperación) */}
+          {/* 1. RUTAS PÚBLICAS */}
           <Route element={<AuthLayout />}>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/registro" element={<RegisterPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           </Route>
 
-          {/* 2. RUTAS PRIVADAS PROTEGIDAS (Requieren Token JWT) */}
+          {/* 2. RUTAS PRIVADAS PROTEGIDAS */}
           <Route element={<ProtectedRoute />}>
             <Route element={<MainLayout />}>
               <Route path="/hoy" element={<Hoy />} />
               <Route path="/crear" element={<CrearEvento />} />
-              <Route path="/detalle-evento" element={<DetalleEvento />} />
+              {/* Se agrega ? a :id? para permitir entrar con o sin ID en la URL */}
+              <Route path="/detalle-evento/:id?" element={<DetalleEvento />} />
               <Route path="/progreso" element={<Progreso />} />
             </Route>
           </Route>

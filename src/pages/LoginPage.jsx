@@ -111,9 +111,7 @@ export const LoginPage = () => {
         </Link>
       </p>
 
-      <p className="text-[11px] text-center text-gray-400 mt-4">
-        Demo: demo@floz.app · demo123
-      </p>
+    
     </div>
   );
 };
