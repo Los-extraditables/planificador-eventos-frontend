@@ -10,6 +10,7 @@ import { MainLayout } from './layouts/MainLayout';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 // Páginas Privadas
 import Hoy from './pages/Hoy';
@@ -46,19 +47,21 @@ function App() {
     <AuthProvider>
       <Router>
         <Routes>
-          {/* 1. RUTAS PÚBLICAS */}
+          {/* 1. RUTA 100% LIBRE E INDEPENDIENTE DE CUALQUIER LAYOUT O GUARD */}
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+          {/* 2. RUTAS PÚBLICAS DE AUTENTICACIÓN (Con AuthLayout) */}
           <Route element={<AuthLayout />}>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/registro" element={<RegisterPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           </Route>
 
-          {/* 2. RUTAS PRIVADAS PROTEGIDAS */}
+          {/* 3. RUTAS PRIVADAS PROTEGIDAS */}
           <Route element={<ProtectedRoute />}>
             <Route element={<MainLayout />}>
               <Route path="/hoy" element={<HoyWrapper />} />
               <Route path="/crear" element={<CrearEvento />} />
-              {/* Se permite entrar con o sin ID en la URL */}
               <Route path="/detalle-evento/:id?" element={<DetalleEvento />} />
               <Route path="/progreso" element={<Progreso />} />
             </Route>
