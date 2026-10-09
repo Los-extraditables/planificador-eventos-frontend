@@ -119,7 +119,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
     }
   };
 
-  // --- LÓGICA DE INTERFAZ OPTIMISTA PARA ACTUALIZAR LA FECHA ---
+  // --- INTERFAZ OPTIMISTA PARA ACTUALIZAR LA FECHA DE LA SUBTAREA ---
   const actualizarFechaGestion = async (eventoId, gestionId, nuevaFecha) => {
     const eventosAnteriores = [...eventos];
 
@@ -137,7 +137,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
       return evento;
     });
 
-    setEventos(eventosActualizados); // Cambio visual instantáneo
+    setEventos(eventosActualizados); // Reflejo instantáneo y dinámico en /hoy
 
     try {
       const token = authService.getToken();
@@ -153,10 +153,10 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
       });
 
       if (!response.ok) throw new Error('Error en el servidor');
-      mostrarMensajeTemporizado('exito', 'Fecha reprogramada correctamente.');
+      mostrarMensajeTemporizado('exito', 'Fecha objetivo actualizada correctamente.');
     } catch (err) {
       console.error(err);
-      setEventos(eventosAnteriores); // Revertir si falla
+      setEventos(eventosAnteriores); // Revertir si hay error de red
       mostrarMensajeTemporizado('error', 'No se pudo guardar la nueva fecha. Revisa tu conexión.');
     }
   };
@@ -245,7 +245,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
     return acc + hrs;
   }, 0);
 
-  // Conectar el parámetro de límite diario configurado o usar 6h por defecto
+  // Límite diario configurado o 6.0 horas por defecto
   const limiteDiarioMax =
     eventos.length > 0
       ? parseFloat(eventos[0].limite_diario_horas || eventos[0].limiteDiarioHoras || 6.0)
@@ -260,11 +260,11 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
     year: 'numeric'
   });
 
-  // Opciones de solución para la sobrecarga
+  // Alternativas de solución a la sobrecarga
   const aplicarSolucion = (tipoSolucion) => {
     if (tipoSolucion === 'ignorar') {
       setAlertaIgnorada(true);
-      mostrarMensajeTemporizado('exito', 'Has decidido mantener tu agenda actual. ¡Mucho éxito hoy!');
+      mostrarMensajeTemporizado('exito', 'Has decidido mantener tu agenda actual.');
     } else if (tipoSolucion === 'reprogramar') {
       const tareasPendientesHoy = gestionesHoy.filter((g) => !g.completada);
       if (tareasPendientesHoy.length > 0) {
@@ -405,7 +405,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
             {horasTotalesHoy > limiteDiarioMax && !alertaIgnorada ? (
               <div className="pt-3 border-t border-red-200/60 mt-2">
                 <p className="text-sm font-bold text-red-700 mb-3">
-                  Has superado tu límite configurado de {limiteDiarioMax}h. ¿Qué deseas hacer?
+                  Has superado tu límite diario de {limiteDiarioMax}h. ¿Cómo deseas solucionarlo?
                 </p>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <button
@@ -471,7 +471,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
             </div>
           </div>
 
-          {/* Banner Informativo (Actividades de hoy) */}
+          {/* Banner Informativo */}
           <div className="space-y-3">
             <h2 className="text-xl font-extrabold text-[#0F172A] tracking-tight">
               Actividades de hoy
@@ -514,7 +514,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
           ) : (
             <div className="space-y-6">
               <div className="space-y-8">
-                {/* SECCIÓN 0: ATRASADAS / VENCIDAS */}
+                {/* SECCIÓN 0: ATRASADAS */}
                 {gestionesAtrasadas.length > 0 && (
                   <div className="space-y-3">
                     <div className="flex items-center gap-2">
@@ -650,7 +650,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
   );
 };
 
-// --- COMPONENTE TARJETA GESTION CON INPUT DE FECHA INTEGRADO ---
+// --- COMPONENTE TARJETA GESTION ---
 const TarjetaGestion = ({ gestion, solicitarCompletar, handleVerDetalle, actualizarFecha, etiqueta, colorTag, esAtrasada, esProxima }) => {
   const fechaMostrar = gestion.plazo || gestion.fecha;
 
@@ -698,7 +698,7 @@ const TarjetaGestion = ({ gestion, solicitarCompletar, handleVerDetalle, actuali
           </h3>
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 text-xs text-slate-500">
-            {/* Input de Fecha interactivo para actualizar sin recargar */}
+            {/* Input para actualizar la fecha dinámicamente sin recargar la página */}
             <div className="flex items-center gap-2">
               <span className="font-medium text-slate-600">📅 Reprogramar:</span>
               <input
