@@ -123,7 +123,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
   const actualizarFechaGestion = async (eventoId, gestionId, nuevaFecha) => {
     const eventosAnteriores = [...eventos];
 
-    // Actualizamos el estado local al instante para recalcular horas y umbral en tiempo real
+    // Actualizamos el estado local al instante para recalcular horas y umbral fluidamente
     const eventosActualizados = eventos.map((evento) => {
       if (evento.id === eventoId) {
         const actualizarListaGestiones = (lista) =>
@@ -139,7 +139,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
     });
 
     setEventos(eventosActualizados); 
-    setAlertaIgnorada(false); // Reseteamos la ignorancia de alerta para que evalúe la nueva carga de inmediato
+    setAlertaIgnorada(false); // Reseteamos la advertencia para evaluar la nueva carga de inmediato
 
     try {
       const token = authService.getToken();
@@ -263,7 +263,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
     year: 'numeric'
   });
 
-  // Soluciones para sobrecarga
+  // --- LÓGICA DE APLICACIÓN DE SOLUCIONES DE SOBRECARGA ---
   const aplicarSolucion = (tipoSolucion) => {
     if (tipoSolucion === 'ignorar') {
       setAlertaIgnorada(true);
@@ -386,7 +386,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
             </div>
           </div>
 
-          {/* MOTOR DE ALERTA AUTOMÁTICO DE SOBRECARGA */}
+          {/* MOTOR DE ALERTA AUTOMÁTICO DE SOBRECARGA Y COMPONENTES VISUALES DE SOLUCIÓN */}
           <div className={`bg-white border-2 ${horasTotalesHoy > limiteDiarioMax && !alertaIgnorada ? 'border-red-400 bg-red-50/30' : 'border-amber-400'} rounded-2xl p-4 sm:p-5 shadow-sm space-y-3 transition-all duration-300`}>
             <div className={`flex items-center justify-between font-bold text-sm ${horasTotalesHoy > limiteDiarioMax && !alertaIgnorada ? 'text-red-800' : 'text-amber-800'}`}>
               <div className="flex items-center gap-2">
@@ -408,18 +408,19 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
             {horasTotalesHoy > limiteDiarioMax && !alertaIgnorada ? (
               <div className="pt-3 border-t border-red-200/60 mt-2">
                 <p className="text-sm font-bold text-red-700 mb-3">
-                  ⚠️ Se ha detectado una sobrecarga automática (superas tu límite de {limiteDiarioMax}h). ¿Qué deseas hacer?
+                  ⚠️ Se ha detectado una sobrecarga (superas tu límite de {limiteDiarioMax}h). Selecciona una alternativa de solución:
                 </p>
+                {/* Componentes visuales interactivos para aplicar la solución elegida */}
                 <div className="flex flex-col sm:flex-row gap-2">
                   <button
                     onClick={() => aplicarSolucion('reprogramar')}
-                    className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-3 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm cursor-pointer"
                   >
                     <span>📅</span> Mover última tarea a mañana
                   </button>
                   <button
                     onClick={() => aplicarSolucion('ignorar')}
-                    className="flex-1 bg-white border border-red-200 hover:bg-red-50 text-red-700 py-2 px-3 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-2 cursor-pointer"
+                    className="flex-1 bg-white border border-red-200 hover:bg-red-50 text-red-700 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <span>✓</span> Mantener agenda
                   </button>
@@ -484,7 +485,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
                 ?
               </div>
               <p>
-                Tus tareas se agrupan por urgencia. Al reprogramar una subtarea para hoy, el sistema detectará automáticamente si sobrepasas tu límite diario.
+                Tus tareas se agrupan por urgencia. Puedes reprogramar fechas al instante desde cada tarjeta para gestionar tu límite diario de manera fluida.
               </p>
             </div>
           </div>
@@ -701,7 +702,7 @@ const TarjetaGestion = ({ gestion, solicitarCompletar, handleVerDetalle, actuali
           </h3>
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 text-xs text-slate-500">
-            {/* Input para disparar la reprogramación y la detección de sobrecarga en tiempo real */}
+            {/* Input interactivo para actualizar fecha y recalcular la sobrecarga dinámicamente */}
             <div className="flex items-center gap-2">
               <span className="font-medium text-slate-600">📅 Reprogramar:</span>
               <input
