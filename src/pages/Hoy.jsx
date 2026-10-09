@@ -119,10 +119,11 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
     }
   };
 
-  // --- INTERFAZ OPTIMISTA PARA ACTUALIZAR LA FECHA DE LA SUBTAREA ---
+  // --- DETECCIÓN AUTOMÁTICA E INTERFAZ OPTIMISTA AL REPROGRAMAR ---
   const actualizarFechaGestion = async (eventoId, gestionId, nuevaFecha) => {
     const eventosAnteriores = [...eventos];
 
+    // Actualizamos el estado local al instante para recalcular horas y umbral en tiempo real
     const eventosActualizados = eventos.map((evento) => {
       if (evento.id === eventoId) {
         const actualizarListaGestiones = (lista) =>
@@ -137,7 +138,8 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
       return evento;
     });
 
-    setEventos(eventosActualizados); // Reflejo instantáneo y dinámico en /hoy
+    setEventos(eventosActualizados); 
+    setAlertaIgnorada(false); // Reseteamos la ignorancia de alerta para que evalúe la nueva carga de inmediato
 
     try {
       const token = authService.getToken();
@@ -153,7 +155,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
       });
 
       if (!response.ok) throw new Error('Error en el servidor');
-      mostrarMensajeTemporizado('exito', 'Fecha objetivo actualizada correctamente.');
+      mostrarMensajeTemporizado('exito', 'Subtarea reprogramada y carga evaluada correctamente.');
     } catch (err) {
       console.error(err);
       setEventos(eventosAnteriores); // Revertir si hay error de red
@@ -181,7 +183,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
     }
   };
 
-  // --- EXTRAER Y MAPEAR GESTIONES DE LA BD ---
+  // --- EXTRACCIÓN Y MAPEO DE GESTIONES ---
   const todasLasGestiones = useMemo(() => {
     return eventos.flatMap((e) => {
       const listaGestiones = e.gestiones || e.gestiones_plan || [];
@@ -194,7 +196,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
     });
   }, [eventos]);
 
-  // Aplicar Filtros (Evento y Estado)
+  // Aplicar Filtros
   const gestionesFiltradas = useMemo(() => {
     return todasLasGestiones.filter((g) => {
       const coincideEvento =
@@ -211,14 +213,14 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
     });
   }, [todasLasGestiones, filtroEvento, filtroEstado]);
 
-  // Fecha en formato local YYYY-MM-DD
+  // Fecha local YYYY-MM-DD
   const hoyLocal = new Date();
   const year = hoyLocal.getFullYear();
   const month = String(hoyLocal.getMonth() + 1).padStart(2, '0');
   const day = String(hoyLocal.getDate()).padStart(2, '0');
   const hoyStr = `${year}-${month}-${day}`;
 
-  // Clasificación por Fechas
+  // Clasificación por fechas
   const gestionesAtrasadas = gestionesFiltradas.filter((g) => {
     const fechaValor = g.plazo || g.fecha;
     if (!fechaValor) return false;
@@ -240,6 +242,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
     return fechaLimpia > hoyStr;
   });
 
+  // Cálculo automático de horas totales para hoy
   const horasTotalesHoy = gestionesHoy.reduce((acc, g) => {
     const hrs = parseFloat(g.horas_estimadas) || 0;
     return acc + hrs;
@@ -260,7 +263,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
     year: 'numeric'
   });
 
-  // Alternativas de solución a la sobrecarga
+  // Soluciones para sobrecarga
   const aplicarSolucion = (tipoSolucion) => {
     if (tipoSolucion === 'ignorar') {
       setAlertaIgnorada(true);
@@ -383,7 +386,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
             </div>
           </div>
 
-          {/* MOTOR DE ALERTA DE SOBRECARGA Y LÍMITE DIARIO */}
+          {/* MOTOR DE ALERTA AUTOMÁTICO DE SOBRECARGA */}
           <div className={`bg-white border-2 ${horasTotalesHoy > limiteDiarioMax && !alertaIgnorada ? 'border-red-400 bg-red-50/30' : 'border-amber-400'} rounded-2xl p-4 sm:p-5 shadow-sm space-y-3 transition-all duration-300`}>
             <div className={`flex items-center justify-between font-bold text-sm ${horasTotalesHoy > limiteDiarioMax && !alertaIgnorada ? 'text-red-800' : 'text-amber-800'}`}>
               <div className="flex items-center gap-2">
@@ -405,7 +408,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
             {horasTotalesHoy > limiteDiarioMax && !alertaIgnorada ? (
               <div className="pt-3 border-t border-red-200/60 mt-2">
                 <p className="text-sm font-bold text-red-700 mb-3">
-                  Has superado tu límite diario de {limiteDiarioMax}h. ¿Cómo deseas solucionarlo?
+                  ⚠️ Se ha detectado una sobrecarga automática (superas tu límite de {limiteDiarioMax}h). ¿Qué deseas hacer?
                 </p>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <button
@@ -427,13 +430,13 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
                 <span className="text-amber-700 font-medium">
                   {alertaIgnorada
                     ? 'Has decidido ignorar la advertencia de sobrecarga.'
-                    : `Tu carga actual respeta tu límite diario de ${limiteDiarioMax}h.`}
+                    : `Tu carga actual respeta tu límite diario configurado de ${limiteDiarioMax}h.`}
                 </span>
               </div>
             )}
           </div>
 
-          {/* BARRA DE FILTROS: POR EVENTO Y POR ESTADO */}
+          {/* BARRA DE FILTROS */}
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
             <span className="text-sm font-bold text-slate-700 flex items-center gap-2">
               🔍 Filtrar actividades:
@@ -481,7 +484,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
                 ?
               </div>
               <p>
-                Tus tareas se agrupan por urgencia. Dentro de cada grupo, verás primero las más antiguas; si coinciden en fecha, te sugerimos iniciar por la que tome menos tiempo.
+                Tus tareas se agrupan por urgencia. Al reprogramar una subtarea para hoy, el sistema detectará automáticamente si sobrepasas tu límite diario.
               </p>
             </div>
           </div>
@@ -650,7 +653,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
   );
 };
 
-// --- COMPONENTE TARJETA GESTION ---
+// --- COMPONENTE TARJETA GESTION CON INPUT DE FECHA INTERACTIVO ---
 const TarjetaGestion = ({ gestion, solicitarCompletar, handleVerDetalle, actualizarFecha, etiqueta, colorTag, esAtrasada, esProxima }) => {
   const fechaMostrar = gestion.plazo || gestion.fecha;
 
@@ -698,7 +701,7 @@ const TarjetaGestion = ({ gestion, solicitarCompletar, handleVerDetalle, actuali
           </h3>
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 text-xs text-slate-500">
-            {/* Input para actualizar la fecha dinámicamente sin recargar la página */}
+            {/* Input para disparar la reprogramación y la detección de sobrecarga en tiempo real */}
             <div className="flex items-center gap-2">
               <span className="font-medium text-slate-600">📅 Reprogramar:</span>
               <input
