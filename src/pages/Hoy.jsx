@@ -17,6 +17,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
 
   const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
   const [confirmModal, setConfirmModal] = useState({ abierto: false, gestion: null });
+  const [alertaIgnorada, setAlertaIgnorada] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL || 'https://planificador-eventos-backend.onrender.com/api';
 
@@ -118,6 +119,48 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
     }
   };
 
+  // --- LÓGICA DE INTERFAZ OPTIMISTA PARA ACTUALIZAR LA FECHA ---
+  const actualizarFechaGestion = async (eventoId, gestionId, nuevaFecha) => {
+    const eventosAnteriores = [...eventos];
+
+    const eventosActualizados = eventos.map((evento) => {
+      if (evento.id === eventoId) {
+        const actualizarListaGestiones = (lista) =>
+          lista?.map((g) => (g.id === gestionId ? { ...g, plazo: nuevaFecha, fecha: nuevaFecha } : g));
+
+        return {
+          ...evento,
+          gestiones: actualizarListaGestiones(evento.gestiones),
+          gestiones_plan: actualizarListaGestiones(evento.gestiones_plan),
+        };
+      }
+      return evento;
+    });
+
+    setEventos(eventosActualizados); // Cambio visual instantáneo
+
+    try {
+      const token = authService.getToken();
+      const baseUrl = API_URL.endsWith('/') ? API_URL : `${API_URL}/`;
+
+      const response = await fetch(`${baseUrl}gestiones/${gestionId}/`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ plazo: nuevaFecha })
+      });
+
+      if (!response.ok) throw new Error('Error en el servidor');
+      mostrarMensajeTemporizado('exito', 'Fecha reprogramada correctamente.');
+    } catch (err) {
+      console.error(err);
+      setEventos(eventosAnteriores); // Revertir si falla
+      mostrarMensajeTemporizado('error', 'No se pudo guardar la nueva fecha. Revisa tu conexión.');
+    }
+  };
+
   const handleVerDetalle = (eventoId) => {
     if (!eventoId) return;
 
@@ -154,11 +197,9 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
   // Aplicar Filtros (Evento y Estado)
   const gestionesFiltradas = useMemo(() => {
     return todasLasGestiones.filter((g) => {
-      // Filtro de Evento
       const coincideEvento =
         filtroEvento === 'todos' || String(g.eventoId) === String(filtroEvento);
 
-      // Filtro de Estado
       let coincideEstado = true;
       if (filtroEstado === 'pendientes') {
         coincideEstado = !g.completada;
@@ -204,6 +245,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
     return acc + hrs;
   }, 0);
 
+  // Conectar el parámetro de límite diario configurado o usar 6h por defecto
   const limiteDiarioMax =
     eventos.length > 0
       ? parseFloat(eventos[0].limite_diario_horas || eventos[0].limiteDiarioHoras || 6.0)
@@ -217,6 +259,28 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
     month: 'long',
     year: 'numeric'
   });
+
+  // Opciones de solución para la sobrecarga
+  const aplicarSolucion = (tipoSolucion) => {
+    if (tipoSolucion === 'ignorar') {
+      setAlertaIgnorada(true);
+      mostrarMensajeTemporizado('exito', 'Has decidido mantener tu agenda actual. ¡Mucho éxito hoy!');
+    } else if (tipoSolucion === 'reprogramar') {
+      const tareasPendientesHoy = gestionesHoy.filter((g) => !g.completada);
+      if (tareasPendientesHoy.length > 0) {
+        const ultimaTarea = tareasPendientesHoy[tareasPendientesHoy.length - 1];
+        const manana = new Date();
+        manana.setDate(manana.getDate() + 1);
+        const yearM = manana.getFullYear();
+        const monthM = String(manana.getMonth() + 1).padStart(2, '0');
+        const dayM = String(manana.getDate()).padStart(2, '0');
+        const mananaStr = `${yearM}-${monthM}-${dayM}`;
+
+        actualizarFechaGestion(ultimaTarea.eventoId, ultimaTarea.id, mananaStr);
+        mostrarMensajeTemporizado('exito', `Solución aplicada: "${ultimaTarea.descripcion}" se movió para mañana.`);
+      }
+    }
+  };
 
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-6xl mx-auto space-y-6 bg-slate-50/50 min-h-screen text-slate-800 text-left font-sans">
@@ -319,32 +383,54 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
             </div>
           </div>
 
-          {/* Tarjeta de Carga de Gestión */}
-          <div className="bg-white border-2 border-amber-400 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3">
-            <div className="flex items-center justify-between text-amber-800 font-bold text-sm">
+          {/* MOTOR DE ALERTA DE SOBRECARGA Y LÍMITE DIARIO */}
+          <div className={`bg-white border-2 ${horasTotalesHoy > limiteDiarioMax && !alertaIgnorada ? 'border-red-400 bg-red-50/30' : 'border-amber-400'} rounded-2xl p-4 sm:p-5 shadow-sm space-y-3 transition-all duration-300`}>
+            <div className={`flex items-center justify-between font-bold text-sm ${horasTotalesHoy > limiteDiarioMax && !alertaIgnorada ? 'text-red-800' : 'text-amber-800'}`}>
               <div className="flex items-center gap-2">
                 <span>Carga de gestión (Hoy)</span>
-                <span>⚠</span>
+                <span>{horasTotalesHoy > limiteDiarioMax && !alertaIgnorada ? '🚨' : '⚠'}</span>
               </div>
               <span>
                 {horasTotalesHoy.toFixed(1)} / {limiteDiarioMax.toFixed(1)} h
               </span>
             </div>
 
-            <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+            <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
               <div
-                className="bg-amber-500 h-2.5 rounded-full transition-all duration-500"
+                className={`${horasTotalesHoy > limiteDiarioMax && !alertaIgnorada ? 'bg-red-500' : 'bg-amber-500'} h-2.5 rounded-full transition-all duration-500`}
                 style={{ width: `${porcentajeCarga}%` }}
               ></div>
             </div>
 
-            <div className="flex items-center justify-between text-xs pt-1">
-              <span className="text-amber-700 font-medium">
-                {horasTotalesHoy > limiteDiarioMax
-                  ? 'Advertencia de agenda: Has excedido la cuota recomendada.'
-                  : 'Tu carga de agenda se encuentra dentro del rango adecuado.'}
-              </span>
-            </div>
+            {horasTotalesHoy > limiteDiarioMax && !alertaIgnorada ? (
+              <div className="pt-3 border-t border-red-200/60 mt-2">
+                <p className="text-sm font-bold text-red-700 mb-3">
+                  Has superado tu límite configurado de {limiteDiarioMax}h. ¿Qué deseas hacer?
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    onClick={() => aplicarSolucion('reprogramar')}
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-3 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+                  >
+                    <span>📅</span> Mover última tarea a mañana
+                  </button>
+                  <button
+                    onClick={() => aplicarSolucion('ignorar')}
+                    className="flex-1 bg-white border border-red-200 hover:bg-red-50 text-red-700 py-2 px-3 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <span>✓</span> Mantener agenda
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between text-xs pt-1">
+                <span className="text-amber-700 font-medium">
+                  {alertaIgnorada
+                    ? 'Has decidido ignorar la advertencia de sobrecarga.'
+                    : `Tu carga actual respeta tu límite diario de ${limiteDiarioMax}h.`}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* BARRA DE FILTROS: POR EVENTO Y POR ESTADO */}
@@ -354,7 +440,6 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
             </span>
 
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              {/* Filtro de Evento */}
               <div className="flex items-center gap-2">
                 <label className="text-xs font-semibold text-slate-500">Evento:</label>
                 <select
@@ -371,7 +456,6 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
                 </select>
               </div>
 
-              {/* Filtro de Estado */}
               <div className="flex items-center gap-2">
                 <label className="text-xs font-semibold text-slate-500">Estado:</label>
                 <select
@@ -450,6 +534,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
                           gestion={gestion}
                           solicitarCompletar={solicitarCompletar}
                           handleVerDetalle={handleVerDetalle}
+                          actualizarFecha={actualizarFechaGestion}
                           etiqueta="Atrasada"
                           colorTag="bg-red-100 text-red-700 border border-red-200"
                           esAtrasada={true}
@@ -483,6 +568,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
                           gestion={gestion}
                           solicitarCompletar={solicitarCompletar}
                           handleVerDetalle={handleVerDetalle}
+                          actualizarFecha={actualizarFechaGestion}
                           etiqueta="Para hoy"
                           colorTag="bg-teal-50 text-teal-700"
                         />
@@ -491,7 +577,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
                   )}
                 </div>
 
-                {/* SECCIÓN 2: PRÓXIMAS (EN GRIS) */}
+                {/* SECCIÓN 2: PRÓXIMAS */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block"></span>
@@ -515,6 +601,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
                           gestion={gestion}
                           solicitarCompletar={solicitarCompletar}
                           handleVerDetalle={handleVerDetalle}
+                          actualizarFecha={actualizarFechaGestion}
                           etiqueta="Próxima"
                           colorTag="bg-slate-100 text-slate-600"
                           esProxima={true}
@@ -563,7 +650,8 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
   );
 };
 
-const TarjetaGestion = ({ gestion, solicitarCompletar, handleVerDetalle, etiqueta, colorTag, esAtrasada, esProxima }) => {
+// --- COMPONENTE TARJETA GESTION CON INPUT DE FECHA INTEGRADO ---
+const TarjetaGestion = ({ gestion, solicitarCompletar, handleVerDetalle, actualizarFecha, etiqueta, colorTag, esAtrasada, esProxima }) => {
   const fechaMostrar = gestion.plazo || gestion.fecha;
 
   let borderStyle = 'border-l-teal-500';
@@ -579,13 +667,15 @@ const TarjetaGestion = ({ gestion, solicitarCompletar, handleVerDetalle, etiquet
     <div
       className={`bg-white border rounded-2xl p-4 shadow-sm flex items-center justify-between transition border-l-4 ${borderStyle} border-slate-200 hover:shadow-md`}
     >
-      <div className="flex items-center gap-4">
-        <input
-          type="checkbox"
-          checked={Boolean(gestion.completada)}
-          onChange={() => solicitarCompletar(gestion)}
-          className="w-5 h-5 cursor-pointer accent-purple-800 rounded"
-        />
+      <div className="flex items-start sm:items-center gap-4">
+        <div className="pt-1 sm:pt-0">
+          <input
+            type="checkbox"
+            checked={Boolean(gestion.completada)}
+            onChange={() => solicitarCompletar(gestion)}
+            className="w-5 h-5 cursor-pointer accent-purple-800 rounded"
+          />
+        </div>
 
         <div className="space-y-1.5">
           <div className="flex items-center gap-2 flex-wrap">
@@ -607,15 +697,24 @@ const TarjetaGestion = ({ gestion, solicitarCompletar, handleVerDetalle, etiquet
             {gestion.descripcion}
           </h3>
 
-          <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
-            {fechaMostrar && (
-              <span>📅 Plazo: {fechaMostrar.toString().split('T')[0]}</span>
-            )}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 text-xs text-slate-500">
+            {/* Input de Fecha interactivo para actualizar sin recargar */}
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-slate-600">📅 Reprogramar:</span>
+              <input
+                type="date"
+                value={fechaMostrar ? fechaMostrar.toString().split('T')[0] : ''}
+                onChange={(e) => actualizarFecha(gestion.eventoId, gestion.id, e.target.value)}
+                className="border border-slate-300 rounded p-1 text-slate-700 bg-slate-50 focus:ring-2 focus:ring-purple-600 focus:outline-none cursor-pointer"
+              />
+            </div>
+
             {gestion.horas_estimadas !== undefined && (
-              <span>⏱️ {gestion.horas_estimadas} hrs</span>
+              <span className="flex items-center gap-1">⏱️ {gestion.horas_estimadas} hrs</span>
             )}
+
             {!gestion.completada && (
-              <span className={`${colorTag} font-medium px-2 py-0.5 rounded-full text-[10px]`}>
+              <span className={`${colorTag} font-medium px-2 py-0.5 rounded-full text-[10px] w-max`}>
                 {etiqueta}
               </span>
             )}
@@ -626,7 +725,7 @@ const TarjetaGestion = ({ gestion, solicitarCompletar, handleVerDetalle, etiquet
       <button
         type="button"
         onClick={() => handleVerDetalle(gestion.eventoId)}
-        className="p-2.5 text-slate-400 hover:text-purple-800 hover:bg-purple-50 rounded-xl transition text-lg cursor-pointer"
+        className="p-2.5 text-slate-400 hover:text-purple-800 hover:bg-purple-50 rounded-xl transition text-lg cursor-pointer flex-shrink-0"
         title="Ver detalle del evento"
       >
         👁️
