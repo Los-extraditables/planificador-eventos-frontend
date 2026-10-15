@@ -58,7 +58,7 @@ h2 {
 }
 
 h1 {
-  font-size: 56px;
+  font-size: 45px;
   letter-spacing: -1.68px;
   margin: 32px 0;
   @media (max-width: 1024px) {
@@ -76,7 +76,8 @@ h2 {
   }
 }
 p {
-  margin: 0;
+  margin: 2;
+  font-size: 15px;
 }
 
 code,

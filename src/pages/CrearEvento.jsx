@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { AlertCircle, CheckCircle2, Clock, Info, Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 
@@ -50,6 +51,10 @@ const CrearEvento = ({ onEventoCreado }) => {
   };
 
   const handleEliminarSubtarea = (id) => {
+    if (gestiones.length === 1) {
+      setGestiones([{ id: Date.now(), descripcion: '', plazo: '', horas_estimadas: '' }]);
+      return;
+    }
     setGestiones(gestiones.filter(g => g.id !== id));
   };
 
@@ -93,7 +98,6 @@ const CrearEvento = ({ onEventoCreado }) => {
     const limiteHoras = parseFloat(formEvento.limite_diario_horas) || 6;
     const horasPorDia = {};
 
-    // Validar cada gestión individualmente y acumular horas por fecha
     for (let i = 0; i < gestiones.length; i++) {
       const g = gestiones[i];
       if (g.descripcion.trim()) {
@@ -113,7 +117,6 @@ const CrearEvento = ({ onEventoCreado }) => {
       }
     }
 
-    // Advertencia opcional si se excede el límite diario configurado
     for (const [fecha, totalHoras] of Object.entries(horasPorDia)) {
       if (totalHoras > limiteHoras) {
         mostrarMensaje(
@@ -184,7 +187,7 @@ const CrearEvento = ({ onEventoCreado }) => {
         throw new Error(formatearError(errData));
       }
 
-      mostrarMensaje('exito', '¡Evento y plan inicial creados con éxito! 🎉');
+      mostrarMensaje('exito', '¡Evento y plan inicial creados con éxito!');
 
       setFormEvento({ nombre: '', tipo: '', fecha: '', limite_diario_horas: '' });
       setGestiones([{ id: Date.now(), descripcion: '', plazo: '', horas_estimadas: '' }]);
@@ -194,33 +197,34 @@ const CrearEvento = ({ onEventoCreado }) => {
 
     } catch (err) {
       mostrarMensaje('error', err.message);
-    } fontFinally: {
+    } finally {
       setCargando(false);
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-4 sm:p-6 font-sans text-slate-800 text-left">
+    <div className="max-w-5xl mx-auto p-4 sm:p-6 md:p-8 font-sans text-slate-800 text-left bg-slate-50/50 min-h-screen">
       
       {/* Encabezado Principal */}
       <div className="mb-6">
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F172A] tracking-tight mb-1">
-          Crear Nuevo Evento y Plan Inicial
-        </h1>
         <p className="text-xs sm:text-sm text-slate-500">
-          Registra los datos generales de tu evento y el desglose de subtareas logísticas.
+          Registra los datos generales del evento y añade sus subtareas.
         </p>
       </div>
 
       {/* Alerta de Mensajes / Errores */}
       {mensaje.texto && (
-        <div className={`p-4 rounded-2xl mb-6 text-sm font-semibold flex items-center justify-between gap-3 ${
+        <div className={`p-4 rounded-2xl mb-6 text-sm font-semibold flex items-center justify-between gap-3 shadow-sm transition-all ${
           mensaje.tipo === 'exito' 
             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
             : 'bg-red-50 text-red-700 border border-red-200'
         }`}>
-          <div className="flex items-center gap-2">
-            <span>{mensaje.tipo === 'exito' ? '✅' : '⚠️'}</span>
+          <div className="flex items-center gap-2.5">
+            {mensaje.tipo === 'exito' ? (
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+            )}
             <span>{mensaje.texto}</span>
           </div>
         </div>
@@ -229,44 +233,47 @@ const CrearEvento = ({ onEventoCreado }) => {
       <form onSubmit={handleSubmit} noValidate className="space-y-6">
         
         {/* BLOQUE 1: Datos del Evento */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm">
-          <h2 className="text-base sm:text-lg font-bold text-slate-900 mb-5 pb-2 border-b border-slate-100">
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-6 sm:p-8 shadow-sm space-y-6">
+          <h2 className="text-base sm:text-lg font-bold text-slate-900">
             Datos del Evento
           </h2>
 
-          <div className="mb-5">
-            <label className="block text-xs font-bold text-slate-700 mb-2">
-              Nombre del Evento <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              placeholder="Ej. Lanzamiento Producto X"
-              className={`w-full px-4 py-3 rounded-xl text-sm transition focus:outline-none ${
-                errores.nombre 
-                  ? 'bg-red-50/50 border border-red-400 text-red-900 placeholder-slate-400 focus:ring-2 focus:ring-red-400' 
-                  : 'border border-slate-300 text-slate-800 focus:ring-2 focus:ring-purple-600'
-              }`}
-              value={formEvento.nombre}
-              onChange={(e) => {
-                setFormEvento({ ...formEvento, nombre: e.target.value });
-                if (errores.nombre) setErrores({ ...errores, nombre: null });
-              }}
-            />
-            {errores.nombre && (
-              <p className="text-xs text-red-500 mt-1.5 font-medium">{errores.nombre}</p>
-            )}
-          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* Nombre del Evento */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-2">
+                Nombre del Evento <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Ej. Lanzamiento Producto X"
+                className={`w-full px-4 py-3 rounded-xl text-sm transition-all bg-[#F8FAFC] border focus:bg-white focus:outline-none ${
+                  errores.nombre 
+                    ? 'bg-red-50/50 border-red-400 text-red-900 placeholder-slate-400 focus:ring-2 focus:ring-red-400' 
+                    : 'border-slate-200 text-slate-800 focus:ring-2 focus:ring-purple-600 focus:border-transparent'
+                }`}
+                value={formEvento.nombre}
+                onChange={(e) => {
+                  setFormEvento({ ...formEvento, nombre: e.target.value });
+                  if (errores.nombre) setErrores({ ...errores, nombre: null });
+                }}
+              />
+              {errores.nombre && (
+                <p className="text-xs text-red-500 mt-1.5 font-medium">{errores.nombre}</p>
+              )}
+            </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+            {/* Tipo */}
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-2">
                 Tipo <span className="text-red-500">*</span>
               </label>
               <select
-                className={`w-full px-4 py-3 rounded-xl text-sm transition focus:outline-none cursor-pointer ${
+                className={`w-full px-4 py-3 rounded-xl text-sm transition-all bg-[#F8FAFC] border focus:bg-white focus:outline-none cursor-pointer appearance-none ${
                   errores.tipo 
-                    ? 'bg-red-50/50 border border-red-400 text-slate-800 focus:ring-2 focus:ring-red-400' 
-                    : 'bg-white border border-slate-300 text-slate-800 focus:ring-2 focus:ring-purple-600'
+                    ? 'bg-red-50/50 border-red-400 text-slate-800 focus:ring-2 focus:ring-red-400' 
+                    : 'border-slate-200 text-slate-500 focus:ring-2 focus:ring-purple-600 focus:border-transparent'
                 }`}
                 value={formEvento.tipo}
                 onChange={(e) => {
@@ -285,139 +292,168 @@ const CrearEvento = ({ onEventoCreado }) => {
               )}
             </div>
 
+            {/* Fecha límite */}
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-2">
                 Fecha límite del Evento <span className="text-red-500">*</span>
               </label>
-              <input
-                type="date"
-                min={hoyStr}
-                className={`w-full px-4 py-3 rounded-xl text-sm transition focus:outline-none ${
-                  errores.fecha 
-                    ? 'bg-red-50/50 border border-red-400 text-slate-800 focus:ring-2 focus:ring-red-400' 
-                    : 'border border-slate-300 text-slate-800 focus:ring-2 focus:ring-purple-600'
-                }`}
-                value={formEvento.fecha}
-                onChange={(e) => {
-                  setFormEvento({ ...formEvento, fecha: e.target.value });
-                  if (errores.fecha) setErrores({ ...errores, fecha: null });
-                }}
-              />
+              <div className="relative">
+                <input
+                  type="date"
+                  min={hoyStr}
+                  className={`w-full px-4 py-3 rounded-xl text-sm transition-all bg-[#F8FAFC] border focus:bg-white focus:outline-none ${
+                    errores.fecha 
+                      ? 'bg-red-50/50 border-red-400 text-slate-800 focus:ring-2 focus:ring-red-400' 
+                      : 'border-slate-200 text-slate-600 focus:ring-2 focus:ring-purple-600 focus:border-transparent'
+                  }`}
+                  value={formEvento.fecha}
+                  onChange={(e) => {
+                    setFormEvento({ ...formEvento, fecha: e.target.value });
+                    if (errores.fecha) setErrores({ ...errores, fecha: null });
+                  }}
+                />
+              </div>
               {errores.fecha && (
                 <p className="text-xs text-red-500 mt-1.5 font-medium">{errores.fecha}</p>
               )}
             </div>
-          </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-2">
-              Límite diario de carga de trabajo <span className="text-red-500">*</span>
-            </label>
-            <div className="relative max-w-md">
-              <input
-                type="number"
-                step="0.5"
-                min="0.5"
-                placeholder="Ej. 6"
-                className={`w-full px-4 py-3 pr-20 rounded-xl text-sm transition focus:outline-none ${
-                  errores.limite_diario_horas 
-                    ? 'bg-red-50/50 border border-red-400 text-red-900 placeholder-slate-400 focus:ring-2 focus:ring-red-400' 
-                    : 'border border-slate-300 text-slate-800 focus:ring-2 focus:ring-purple-600'
-                }`}
-                value={formEvento.limite_diario_horas}
-                onChange={(e) => {
-                  setFormEvento({ ...formEvento, limite_diario_horas: e.target.value });
-                  if (errores.limite_diario_horas) setErrores({ ...errores, limite_diario_horas: null });
-                }}
-              />
-              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-medium">
-                hrs/día
-              </span>
-            </div>
-            {errores.limite_diario_horas && (
-              <p className="text-xs text-red-500 mt-1.5 font-medium">{errores.limite_diario_horas}</p>
-            )}
-          </div>
-        </div>
-
-        {/* BLOQUE 2: Plan Logístico Inicial */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm">
-          <div className="mb-4 pb-2 border-b border-slate-100">
-            <h2 className="text-base sm:text-lg font-bold text-slate-900">Plan Logístico Inicial (Opcional)</h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Define las gestiones o subtareas clave necesarias para organizar este evento.
-            </p>
-          </div>
-
-          <div className="hidden sm:grid grid-cols-12 gap-3 mb-2 px-1 text-slate-400 text-[11px] font-bold uppercase tracking-wider">
-            <span className="col-span-5">Descripción de la Gestión</span>
-            <span className="col-span-3">Plazo Límite</span>
-            <span className="col-span-3">Horas Est.</span>
-            <span className="col-span-1 text-center">Acción</span>
-          </div>
-
-          {gestiones.map((gest, index) => (
-            <div key={gest.id} className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center mb-3 p-3 sm:p-0 bg-slate-50 sm:bg-transparent rounded-xl">
-              <div className="sm:col-span-5">
-                <label className="block sm:hidden text-[11px] font-bold text-slate-500 mb-1">Descripción</label>
-                <input
-                  type="text"
-                  placeholder={index === 0 ? "Ej. Reservar salón de conferencias" : "Ej. Confirmar servicio de catering"}
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-600 transition"
-                  value={gest.descripcion}
-                  onChange={(e) => handleGestionChange(gest.id, 'descripcion', e.target.value)}
-                />
-              </div>
-
-              <div className="sm:col-span-3">
-                <label className="block sm:hidden text-[11px] font-bold text-slate-500 mb-1">Plazo Límite</label>
-                <input
-                  type="date"
-                  min={hoyStr}
-                  max={formEvento.fecha || undefined}
-                  className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-600 transition"
-                  value={gest.plazo}
-                  onChange={(e) => handleGestionChange(gest.id, 'plazo', e.target.value)}
-                />
-              </div>
-
-              <div className="sm:col-span-3">
-                <label className="block sm:hidden text-[11px] font-bold text-slate-500 mb-1">Horas Est.</label>
+            {/* Límite diario */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-2">
+                Límite diario de carga de trabajo <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
                 <input
                   type="number"
                   step="0.5"
-                  min="0"
-                  placeholder="0.0"
-                  className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-600 transition"
-                  value={gest.horas_estimadas}
-                  onChange={(e) => handleGestionChange(gest.id, 'horas_estimadas', e.target.value)}
+                  min="0.5"
+                  placeholder="Ej. 6"
+                  className={`w-full px-4 py-3 pr-24 rounded-xl text-sm transition-all bg-[#F8FAFC] border focus:bg-white focus:outline-none ${
+                    errores.limite_diario_horas 
+                      ? 'bg-red-50/50 border-red-400 text-red-900 focus:ring-2 focus:ring-red-400' 
+                      : 'border-slate-200 text-slate-800 focus:ring-2 focus:ring-purple-600 focus:border-transparent'
+                  }`}
+                  value={formEvento.limite_diario_horas}
+                  onChange={(e) => {
+                    setFormEvento({ ...formEvento, limite_diario_horas: e.target.value });
+                    if (errores.limite_diario_horas) setErrores({ ...errores, limite_diario_horas: null });
+                  }}
                 />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-medium flex items-center gap-1 pointer-events-none">
+                  <Clock className="w-3.5 h-3.5 text-slate-400" /> horas/día
+                </span>
               </div>
-
-              <div className="sm:col-span-1 flex justify-end sm:justify-center">
-                <button
-                  type="button"
-                  onClick={() => handleEliminarSubtarea(gest.id)}
-                  className="text-slate-400 hover:text-red-600 p-2 rounded-lg transition text-sm"
-                  title="Eliminar gestión"
-                >
-                  ✕
-                </button>
-              </div>
+              <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1 font-medium">
+                <Info className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                Referencia sugerida: 6 horas por día.
+              </p>
+              {errores.limite_diario_horas && (
+                <p className="text-xs text-red-500 mt-1.5 font-medium">{errores.limite_diario_horas}</p>
+              )}
             </div>
-          ))}
 
+          </div>
+        </div>
+
+        {/* BLOQUE 2: Subtareas Iniciales */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-6 sm:p-8 shadow-sm space-y-5">
+          <div>
+            <h2 className="text-base sm:text-lg font-bold text-slate-900">
+              Subtareas iniciales
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Define las subtareas necesarias para organizar el evento.
+            </p>
+          </div>
+
+          {/* Banner de información Lila */}
+          <div className="bg-[#F3E8FF]/60 border border-[#E9D5FF] rounded-xl px-4 py-3 flex items-center gap-2 text-[#7E22CE] text-xs font-medium">
+            <Info className="w-4 h-4 flex-shrink-0 text-[#8B5CF6]" />
+            <span>No es obligatorio crear una subtarea</span>
+          </div>
+
+          {/* Encabezado de columnas */}
+          <div className="hidden sm:grid grid-cols-12 gap-3 px-1 text-slate-400 text-[11px] font-bold uppercase tracking-wider">
+            <span className="col-span-6">Nombre de la subtarea</span>
+            <span className="col-span-3">Plazo</span>
+            <span className="col-span-2">Horas Est.</span>
+            <span className="col-span-1 text-center"></span>
+          </div>
+
+          {/* Filas de Subtareas */}
+          <div className="space-y-3">
+            {gestiones.map((gest, index) => (
+              <div key={gest.id} className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center p-3 sm:p-0 bg-slate-50/50 sm:bg-transparent rounded-xl border border-slate-100 sm:border-none">
+                
+                {/* Nombre subtarea */}
+                <div className="sm:col-span-6">
+                  <label className="block sm:hidden text-[11px] font-bold text-slate-500 mb-1">Nombre de la subtarea</label>
+                  <input
+                    type="text"
+                    placeholder="Ej. Confirmar catering"
+                    className="w-full px-4 py-2.5 bg-[#F8FAFC] border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent transition"
+                    value={gest.descripcion}
+                    onChange={(e) => handleGestionChange(gest.id, 'descripcion', e.target.value)}
+                  />
+                </div>
+
+                {/* Plazo */}
+                <div className="sm:col-span-3">
+                  <label className="block sm:hidden text-[11px] font-bold text-slate-500 mb-1">Plazo</label>
+                  <div className="relative">
+                    <input
+                      type="date"
+                      min={hoyStr}
+                      max={formEvento.fecha || undefined}
+                      className="w-full px-3 py-2.5 bg-[#F8FAFC] border border-slate-200 rounded-xl text-xs text-slate-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent transition"
+                      value={gest.plazo}
+                      onChange={(e) => handleGestionChange(gest.id, 'plazo', e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Horas estimadas */}
+                <div className="sm:col-span-2">
+                  <label className="block sm:hidden text-[11px] font-bold text-slate-500 mb-1">Horas Est.</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    placeholder="Ej. 2.5"
+                    className="w-full px-3 py-2.5 bg-[#F8FAFC] border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent transition"
+                    value={gest.horas_estimadas}
+                    onChange={(e) => handleGestionChange(gest.id, 'horas_estimadas', e.target.value)}
+                  />
+                </div>
+
+                {/* Botón eliminar */}
+                <div className="sm:col-span-1 flex justify-end sm:justify-center">
+                  <button
+                    type="button"
+                    onClick={() => handleEliminarSubtarea(gest.id)}
+                    className="text-slate-400 hover:text-red-500 p-2 rounded-xl hover:bg-red-50 transition cursor-pointer"
+                    title="Eliminar subtarea"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Botón agregar subtarea */}
           <button
             type="button"
             onClick={handleAgregarSubtarea}
-            className="mt-3 text-purple-700 font-bold text-xs hover:text-purple-900 inline-flex items-center gap-1.5 transition cursor-pointer"
+            className="pt-2 text-[#8B5CF6] font-bold text-xs hover:text-purple-800 inline-flex items-center gap-1.5 transition cursor-pointer"
           >
-            + Agregar otra gestión
+            <Plus className="w-4 h-4" /> Agregar otra subtarea
           </button>
         </div>
 
-        {/* Botones de Acción */}
-        <div className="flex justify-end gap-3 pt-2">
+        {/* Botones de Acción inferior */}
+        <div className="flex items-center justify-end gap-3 pt-2">
           <button
             type="button"
             onClick={() => {
@@ -425,7 +461,7 @@ const CrearEvento = ({ onEventoCreado }) => {
               setGestiones([{ id: Date.now(), descripcion: '', plazo: '', horas_estimadas: '' }]);
               setErrores({});
             }}
-            className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm transition cursor-pointer"
+            className="px-5 py-2.5 border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-sm transition cursor-pointer"
           >
             Limpiar Formulario
           </button>
@@ -433,7 +469,7 @@ const CrearEvento = ({ onEventoCreado }) => {
           <button
             type="submit"
             disabled={cargando}
-            className="px-6 py-2.5 bg-[#3B0764] hover:bg-[#2E1065] text-white font-bold rounded-xl text-sm transition shadow-md shadow-purple-950/20 disabled:opacity-50 cursor-pointer"
+            className="px-6 py-2.5 bg-[#7E22CE] hover:bg-[#6B21A8] text-white font-bold rounded-xl text-sm transition shadow-sm disabled:opacity-50 cursor-pointer"
           >
             {cargando ? 'Guardando Evento...' : 'Guardar Evento'}
           </button>

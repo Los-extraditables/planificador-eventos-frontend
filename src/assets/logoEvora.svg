@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Fondo con degradado de la app -->
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2c2262" />
+      <stop offset="50%" stop-color="#1f587c" />
+      <stop offset="100%" stop-color="#00d4b8" />
+    </linearGradient>
+
+    <!-- Brillo de la estrella -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Contenedor principal con esquinas redondeadas ajustado al borde -->
+  <rect x="16" y="16" width="480" height="480" rx="100" ry="100" fill="url(#bgGradient)" />
+
+  <!-- Estructura de circuitos de la 'E' -->
+  <g fill="#ffffff">
+    <!-- Líneas de conexión -->
+    <rect x="160" y="167" width="200" height="26" rx="13" />
+    <rect x="160" y="243" width="130" height="26" rx="13" />
+    <rect x="160" y="319" width="200" height="26" rx="13" />
+    <rect x="147" y="180" width="26" height="152" rx="13" />
+
+    <!-- Nodos circulares -->
+    <!-- Columna izquierda -->
+    <circle cx="160" cy="180" r="28" />
+    <circle cx="160" cy="256" r="28" />
+    <circle cx="160" cy="332" r="28" />
+
+    <!-- Nodos derechos -->
+    <circle cx="348" cy="180" r="28" />
+    <circle cx="276" cy="256" r="24" />
+    <circle cx="348" cy="332" r="28" />
+  </g>
+
+  <!-- Estrella / Brillo superior derecho -->
+  <g transform="translate(372, 126)" filter="url(#glow)">
+    <path d="M 0 -35 C 0 -10 10 0 35 0 C 10 0 0 10 0 35 C 0 10 -10 0 -35 0 C -10 0 0 -10 0 -35 Z" fill="#00f7e2" />
+    <circle cx="0" cy="0" r="6" fill="#ffffff" />
+  </g>
+</svg>

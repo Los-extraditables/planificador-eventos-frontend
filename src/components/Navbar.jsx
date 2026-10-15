@@ -1,37 +1,46 @@
-import { useState } from 'react';
+import { CalendarPlus, ChevronDown, ChevronUp, FileText, Gauge, LayoutGrid, LogOut, Minus, Plus, TrendingUp, User } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
+import logoEvora from '../assets/logoEvora.svg';
 import { useAuth } from '../context/AuthContext';
+import { useCargaDiaria } from '../context/CargaDiariaContext';
 
 const Navbar = () => {
   const navigate = useNavigate();
   const { user, logout, userDisplayName } = useAuth();
+  const { limiteDiarioMax, incrementarLimite, decrementarLimite } = useCargaDiaria();
+  
   const [mostrarModalLogout, setMostrarModalLogout] = useState(false);
+  const [mostrarPopoverCarga, setMostrarPopoverCarga] = useState(false);
+  const popoverRef = useRef(null);
 
-  // Obtener exclusivamente el nombre de usuario o nombre de pila (NUNCA el correo)
+  // Cerrar popover al hacer clic fuera de él
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (popoverRef.current && !popoverRef.current.contains(event.target)) {
+        setMostrarPopoverCarga(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const obtenerNombreMostrado = () => {
     if (user) {
       const firstName = user.first_name || user.firstName || '';
       const lastName = user.last_name || user.lastName || '';
       const fullName = `${firstName} ${lastName}`.trim();
-      
       if (fullName) return fullName;
       if (user.first_name && user.first_name.trim() !== '') return user.first_name;
       if (user.fullName && !user.fullName.includes('@')) return user.fullName;
       if (user.name && !user.name.includes('@')) return user.name;
       if (user.username && !user.username.includes('@')) return user.username;
     }
-
-    if (userDisplayName && !userDisplayName.includes('@')) {
-      return userDisplayName;
-    }
-
+    if (userDisplayName && !userDisplayName.includes('@')) return userDisplayName;
     return 'Usuario';
   };
 
-  const solicitarLogout = () => {
-    setMostrarModalLogout(true);
-  };
-
+  const solicitarLogout = () => setMostrarModalLogout(true);
   const confirmarLogout = () => {
     setMostrarModalLogout(false);
     logout();
@@ -40,249 +49,127 @@ const Navbar = () => {
 
   return (
     <>
-      <header style={styles.header}>
-        {/* Brand / Logo (Evora) */}
-        <div style={styles.brand}>
-          <div style={styles.logoIcon}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M2 17L12 22L22 17" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M2 12L12 17L22 12" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
+      <header className="bg-white border-b border-slate-200/80 px-6 h-16 flex items-center justify-between text-slate-800 font-sans shadow-xs relative z-40">
+        {/* Lado Izquierdo: Brand + Separador + Navegación */}
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3 pr-6 border-r border-slate-200/90 h-8 flex-shrink-0">
+            <img src={logoEvora} alt="Evora Logo" className="w-8 h-8 rounded-xl object-cover shadow-xs flex-shrink-0" />
+            <span className="font-extrabold text-lg text-slate-900 tracking-tight flex-shrink-0">Evora</span>
           </div>
-          <span style={styles.brandName}>Evora</span>
+
+          <nav className="flex items-center gap-1 sm:gap-2">
+            <NavLink to="/hoy" className={({ isActive }) => `flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${isActive ? 'bg-purple-100/70 text-purple-900 shadow-2xs' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/50'}`}>
+              <LayoutGrid className="w-4 h-4" /> <span>Hoy</span>
+            </NavLink>
+            <NavLink to="/crear" className={({ isActive }) => `flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${isActive ? 'bg-purple-100/70 text-purple-900 shadow-2xs' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/50'}`}>
+              <CalendarPlus className="w-4 h-4" /> <span>Crear Evento</span>
+            </NavLink>
+            <NavLink to="/detalle-evento" className={({ isActive }) => `flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${isActive ? 'bg-purple-100/70 text-purple-900 shadow-2xs' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/50'}`}>
+              <FileText className="w-4 h-4" /> <span>Detalle Evento</span>
+            </NavLink>
+            <NavLink to="/progreso" className={({ isActive }) => `flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${isActive ? 'bg-purple-100/70 text-purple-900 shadow-2xs' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/50'}`}>
+              <TrendingUp className="w-4 h-4" /> <span>Progreso</span>
+            </NavLink>
+          </nav>
         </div>
 
-        {/* Links de Navegación */}
-        <nav style={styles.nav}>
-          <NavLink
-            to="/hoy"
-            style={({ isActive }) => (isActive ? { ...styles.link, ...styles.activeLink } : styles.link)}
+        {/* Lado Derecho: Menú Usuario y Carga Diaria */}
+        <div className="flex items-center gap-4 relative" ref={popoverRef}>
+          {/* Botón desplegable Usuario */}
+          <button
+            onClick={() => setMostrarPopoverCarga(!mostrarPopoverCarga)}
+            className={`flex items-center gap-2 text-xs sm:text-sm font-semibold px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+              mostrarPopoverCarga
+                ? 'bg-purple-100/80 text-purple-950 shadow-2xs'
+                : 'bg-slate-100/80 text-slate-700 hover:bg-slate-200/60'
+            }`}
           >
-            Hoy
-          </NavLink>
-          <NavLink
-            to="/crear"
-            style={({ isActive }) => (isActive ? { ...styles.link, ...styles.activeLink } : styles.link)}
-          >
-            Crear Evento
-          </NavLink>
-          <NavLink
-            to="/detalle-evento"
-            style={({ isActive }) => (isActive ? { ...styles.link, ...styles.activeLink } : styles.link)}
-          >
-            Detalle Evento
-          </NavLink>
-          <NavLink
-            to="/progreso"
-            style={({ isActive }) => (isActive ? { ...styles.link, ...styles.activeLink } : styles.link)}
-          >
-            Progreso
-          </NavLink>
-        </nav>
+            <div className="w-6 h-6 rounded-full bg-purple-200/70 text-purple-900 flex items-center justify-center">
+              <User className="w-3.5 h-3.5" />
+            </div>
+            <span>{obtenerNombreMostrado()}</span>
+            {mostrarPopoverCarga ? (
+              <ChevronUp className="w-4 h-4 text-purple-900" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-slate-500" />
+            )}
+          </button>
 
-        {/* Usuario y Cierre de Sesión */}
-        <div style={styles.userSection}>
-          <div style={styles.userBadge}>
-            <span style={styles.userAvatar}>👤</span>
-            <span style={styles.userName}>{obtenerNombreMostrado()}</span>
-          </div>
+          {/* POPOVER DE CARGA DIARIA  */}
+          {mostrarPopoverCarga && (
+            <div className="absolute right-16 top-12 w-80 bg-slate-50 border border-slate-200/90 rounded-3xl p-5 shadow-xl space-y-4 z-50 transition-all animate-in fade-in zoom-in-95">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-purple-100/80 text-purple-700 flex items-center justify-center flex-shrink-0">
+                  <Gauge className="w-5 h-5" />
+                </div>
+                <div className='text-left'>
+                  <h4 className="font-bold text-slate-900 text-sm">Carga diaria</h4>
+                  <p className="text-xs text-slate-500 leading-snug">
+                    Define cuántas horas puedes dedicar a tus subtareas cada día.
+                  </p>
+                </div>
+              </div>
 
-          <button 
-            onClick={solicitarLogout} 
-            style={styles.logoutButton} 
+              {/* Selector de Horas */}
+              <div className="bg-slate-100/80 border border-slate-200/80 rounded-2xl p-3 flex items-center justify-between">
+                <button
+                  onClick={decrementarLimite}
+                  className="w-10 h-10 rounded-xl bg-white border border-slate-200/80 text-purple-700 hover:bg-slate-50 font-bold flex items-center justify-center shadow-2xs transition cursor-pointer"
+                  title="Reducir horas"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+
+                <div className="text-center">
+                  <span className="block text-base font-extrabold text-slate-900">
+                    {limiteDiarioMax.toFixed(1)} h
+                  </span>
+                  <span className="text-[11px] text-slate-400 font-medium">por día</span>
+                </div>
+
+                <button
+                  onClick={incrementarLimite}
+                  className="w-10 h-10 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold flex items-center justify-center shadow-xs transition cursor-pointer"
+                  title="Aumentar horas"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+
+              <p className="text-[11px] text-slate-400 text-center leading-tight">
+                El cambio se refleja automáticamente en la vista Hoy.
+              </p>
+            </div>
+          )}
+
+          <button
+            onClick={solicitarLogout}
+            className="flex items-center gap-1.5 text-xs sm:text-sm font-medium text-slate-400 hover:text-red-600 transition-colors p-1.5 rounded-lg cursor-pointer"
             title="Cerrar Sesión"
-            aria-label="Cerrar sesión"
           >
-            🚪 Salir
+            <LogOut className="w-4 h-4" />
+            <span>Salir</span>
           </button>
         </div>
       </header>
 
-      {/* MODAL DE CONFIRMACIÓN AL CERRAR SESIÓN */}
+      {/* Modal Logout (sin cambios) */}
       {mostrarModalLogout && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modalBox}>
-            <h3 style={styles.modalTitle}>Cerrar Sesión</h3>
-            <p style={styles.modalText}>
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4 text-left">
+            <h3 className="text-lg font-bold text-slate-900">Cerrar Sesión</h3>
+            <p className="text-sm text-slate-600">
               ¿Estás seguro de que deseas salir de la plataforma, <strong>{obtenerNombreMostrado()}</strong>?
             </p>
-            <div style={styles.modalActions}>
-              <button 
-                onClick={() => setMostrarModalLogout(false)} 
-                style={styles.cancelBtn}
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={confirmarLogout} 
-                style={styles.confirmBtn}
-              >
-                Sí, salir
-              </button>
+            <div className="flex justify-end gap-3 pt-2">
+              <button onClick={() => setMostrarModalLogout(false)} className="px-4 py-2 border border-slate-300 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition cursor-pointer">Cancelar</button>
+              <button onClick={confirmarLogout} className="px-4 py-2 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition cursor-pointer">Sí, salir</button>
             </div>
           </div>
         </div>
       )}
     </>
   );
-};
-
-const styles = {
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '0 1.5rem',
-    height: '64px',
-    backgroundColor: '#ffffff',
-    borderBottom: '1px solid #e2e8f0',
-    color: '#0f172a',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    flexWrap: 'wrap',
-    gap: '0.5rem'
-  },
-  brand: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.75rem'
-  },
-  logoIcon: {
-    width: '34px',
-    height: '34px',
-    borderRadius: '10px',
-    background: 'linear-gradient(135deg, #2E1065 0%, #0284C7 100%)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-  },
-  brandName: {
-    fontWeight: '800',
-    fontSize: '1.25rem',
-    color: '#0F172A',
-    letterSpacing: '-0.025em'
-  },
-  nav: {
-    display: 'flex',
-    gap: '1.5rem',
-    height: '100%',
-    alignItems: 'center'
-  },
-  link: {
-    display: 'flex',
-    alignItems: 'center',
-    textDecoration: 'none',
-    color: '#64748b',
-    fontWeight: '500',
-    fontSize: '0.9rem',
-    borderBottom: '3px solid transparent',
-    padding: '0.5rem 0.25rem',
-    transition: 'all 0.2s ease'
-  },
-  activeLink: {
-    color: '#3B0764',
-    fontWeight: '700',
-    borderBottom: '3px solid #3B0764'
-  },
-  userSection: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px'
-  },
-  userBadge: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    backgroundColor: '#f8fafc',
-    padding: '6px 12px',
-    borderRadius: '10px',
-    border: '1px solid #e2e8f0'
-  },
-  userAvatar: {
-    fontSize: '0.85rem'
-  },
-  userName: {
-    fontSize: '0.85rem',
-    fontWeight: '600',
-    color: '#334155'
-  },
-  logoutButton: {
-    background: '#fef2f2',
-    color: '#dc2626',
-    border: '1px solid #fecaca',
-    borderRadius: '10px',
-    padding: '6px 12px',
-    fontSize: '0.85rem',
-    fontWeight: '600',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-    cursor: 'pointer',
-    transition: 'background 0.2s'
-  },
-
-  // Modal Styles
-  modalOverlay: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(15, 23, 42, 0.4)',
-    backdropFilter: 'blur(4px)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 1000,
-    padding: '1rem'
-  },
-  modalBox: {
-    backgroundColor: '#ffffff',
-    borderRadius: '16px',
-    padding: '1.5rem',
-    maxWidth: '400px',
-    width: '100%',
-    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-    textAlign: 'left'
-  },
-  modalTitle: {
-    margin: 0,
-    fontSize: '1.125rem',
-    fontWeight: '700',
-    color: '#0f172a'
-  },
-  modalText: {
-    margin: '0.75rem 0 1.25rem 0',
-    fontSize: '0.875rem',
-    color: '#475569',
-    lineHeight: '1.4'
-  },
-  modalActions: {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    gap: '0.75rem'
-  },
-  cancelBtn: {
-    padding: '0.5rem 1rem',
-    borderRadius: '8px',
-    border: '1px solid #cbd5e1',
-    backgroundColor: '#ffffff',
-    color: '#334155',
-    fontSize: '0.875rem',
-    fontWeight: '500',
-    cursor: 'pointer'
-  },
-  confirmBtn: {
-    padding: '0.5rem 1rem',
-    borderRadius: '8px',
-    border: 'none',
-    backgroundColor: '#dc2626',
-    color: '#ffffff',
-    fontSize: '0.875rem',
-    fontWeight: '600',
-    cursor: 'pointer'
-  }
 };
 
 export default Navbar;
