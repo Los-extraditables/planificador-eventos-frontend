@@ -9,7 +9,7 @@ import { authService } from '../services/authService';
 
 const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
   const navigate = useNavigate();
-  const { userDisplayName } = useAuth();
+  const { userDisplayName, token, logout } = useAuth();
 
   const [eventos, setEventos] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -29,9 +29,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
   const API_URL = import.meta.env.VITE_API_URL || 'https://planificador-eventos-backend.onrender.com/api';
 
   const handleSesionExpirada = () => {
-    authService.logout();
-    localStorage.removeItem('token');
-    localStorage.removeItem('refresh_token');
+    logout();            // antes: authService.logout()
     navigate('/login');
   };
 
@@ -39,9 +37,9 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
     try {
       setCargando(true);
       setError(null);
-      const token = localStorage.getItem('token') || authService.getToken();
+      const tokenActual = token || localStorage.getItem('token');
 
-      if (!token) {
+      if (!tokenActual) {
         handleSesionExpirada();
         return;
       }

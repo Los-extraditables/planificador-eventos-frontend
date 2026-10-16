@@ -94,7 +94,7 @@ export const AuthProvider = ({ children }) => {
     // Si el backend devuelve token y usuario al registrar
     if (data.token) {
       setToken(data.token);
-      setTokenStorage(data.token);
+      localStorage.setItem('token', data.token);
     }
     
     const usuarioRegistrado = data.user || data;
