@@ -2,13 +2,18 @@ import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export const ProtectedRoute = () => {
-  const { isAuthenticated } = useAuth();
+  const { token, loading } = useAuth();
 
-  // Si no está autenticado, bloquea la vista y redirige a /login
-  if (!isAuthenticated) {
+  if (loading) {
+    return null; 
+  }
+
+  // Verificamos el estado de React O consultamos directamente el localStorage
+  const isLogged = !!token || !!localStorage.getItem('token');
+
+  if (!isLogged) {
     return <Navigate to="/login" replace />;
   }
 
-  // Si sí está autenticado, le permite ver las páginas internas
   return <Outlet />;
 };

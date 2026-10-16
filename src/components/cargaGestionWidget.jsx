@@ -36,12 +36,6 @@ export default function CargaGestionWidget({
           <span className="text-[#A47648]">
             Advertencia de agenda: Has excedido la cuota recomendada.
           </span>
-          <button
-            onClick={() => aplicarSolucion('reprogramar')}
-            className="font-bold text-[#6D218D] hover:text-[#5B1C76] flex items-center gap-1.5 cursor-pointer bg-transparent border-none p-0"
-          >
-            Reprogramar gestiones <span>→</span>
-          </button>
         </div>
       )}
 

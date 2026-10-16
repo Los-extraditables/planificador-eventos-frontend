@@ -26,6 +26,7 @@ const Navbar = () => {
   }, []);
 
   const obtenerNombreMostrado = () => {
+    // 1. Intentamos leer desde el estado global 'user'
     if (user) {
       const firstName = user.first_name || user.firstName || '';
       const lastName = user.last_name || user.lastName || '';
@@ -35,8 +36,28 @@ const Navbar = () => {
       if (user.fullName && !user.fullName.includes('@')) return user.fullName;
       if (user.name && !user.name.includes('@')) return user.name;
       if (user.username && !user.username.includes('@')) return user.username;
+      if (user.email) return user.email.split('@')[0];
     }
-    if (userDisplayName && !userDisplayName.includes('@')) return userDisplayName;
+
+    // 2. Respaldo de seguridad leyendo directamente de localStorage ('user')
+    try {
+      const localUserStr = localStorage.getItem('user');
+      if (localUserStr) {
+        const localUser = JSON.parse(localUserStr);
+        const name = localUser.first_name || localUser.username || localUser.email;
+        if (name) {
+          return name.includes('@') ? name.split('@')[0] : name;
+        }
+      }
+    } catch (e) {
+      console.error('Error al leer usuario de localStorage:', e);
+    }
+
+    // 3. Respaldo adicional con userDisplayName
+    if (userDisplayName) {
+      return userDisplayName.includes('@') ? userDisplayName.split('@')[0] : userDisplayName;
+    }
+
     return 'Usuario';
   };
 
