@@ -31,6 +31,8 @@ const CrearEvento = ({ onEventoCreado }) => {
 
   const handleSesionExpirada = () => {
     authService.logout();
+    localStorage.removeItem('token');
+    localStorage.removeItem('refresh_token');
     navigate('/login');
   };
 
@@ -96,38 +98,43 @@ const CrearEvento = ({ onEventoCreado }) => {
     }
 
     const limiteHoras = parseFloat(formEvento.limite_diario_horas) || 6;
-    const horasPorDia = {};
 
-    for (let i = 0; i < gestiones.length; i++) {
-      const g = gestiones[i];
-      if (g.descripcion.trim()) {
-        const plazoGestion = g.plazo || formEvento.fecha;
-        
-        if (plazoGestion < hoyStr) {
-          mostrarMensaje('error', `La gestión "${g.descripcion}" no puede tener un plazo anterior a la fecha actual.`);
-          return;
-        }
-        if (formEvento.fecha && plazoGestion > formEvento.fecha) {
-          mostrarMensaje('error', `La gestión "${g.descripcion}" no puede tener un plazo posterior a la fecha del evento (${formEvento.fecha}).`);
-          return;
-        }
+    // Validar que la suma total de horas estimadas de las subtareas
+    // no supere el límite del evento
+    const gestionesConDescripcion = gestiones.filter(
+      g => g.descripcion && g.descripcion.trim() !== ''
+    );
 
-        const hrs = parseFloat(g.horas_estimadas) || 0;
-        horasPorDia[plazoGestion] = (horasPorDia[plazoGestion] || 0) + hrs;
-      }
-    }
+    let totalHorasSubtareas = 0;
+    for (let i = 0; i < gestionesConDescripcion.length; i++) {
+      const g = gestionesConDescripcion[i];
+      const plazoGestion = g.plazo || formEvento.fecha;
 
-    for (const [fecha, totalHoras] of Object.entries(horasPorDia)) {
-      if (totalHoras > limiteHoras) {
-        mostrarMensaje(
-          'error',
-          `La suma de horas para el día ${fecha} (${totalHoras}h) supera el límite diario configurado de ${limiteHoras}h.`
-        );
+      if (plazoGestion && plazoGestion < hoyStr) {
+        mostrarMensaje('error', `La subtarea "${g.descripcion}" no puede tener un plazo anterior a la fecha actual.`);
         return;
       }
+      if (formEvento.fecha && plazoGestion && plazoGestion > formEvento.fecha) {
+        mostrarMensaje('error', `La subtarea "${g.descripcion}" no puede tener un plazo posterior a la fecha del evento (${formEvento.fecha}).`);
+        return;
+      }
+
+      const hrs = parseFloat(g.horas_estimadas);
+      if (!isNaN(hrs) && hrs > 0) {
+        totalHorasSubtareas += hrs;
+      }
     }
 
-    const token = authService.getToken();
+    if (totalHorasSubtareas > limiteHoras) {
+      mostrarMensaje(
+        'error',
+        `Las horas estimadas de las subtareas (${totalHorasSubtareas}h) superan la duración máxima establecida para este evento (${limiteHoras}h). Reduce las horas de una o varias subtareas para continuar.`
+      );
+      return;
+    }
+
+
+    const token = localStorage.getItem('token') || authService.getToken();
 
     if (!token) {
       handleSesionExpirada();
@@ -341,12 +348,12 @@ const CrearEvento = ({ onEventoCreado }) => {
                   }}
                 />
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-medium flex items-center gap-1 pointer-events-none">
-                  <Clock className="w-3.5 h-3.5 text-slate-400" /> horas/día
+                  <Clock className="w-3.5 h-3.5 text-slate-400" /> horas (límite total)
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1 font-medium">
                 <Info className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                Referencia sugerida: 6 horas por día.
+                Total máximo de horas estimadas para todas las subtareas.
               </p>
               {errores.limite_diario_horas && (
                 <p className="text-xs text-red-500 mt-1.5 font-medium">{errores.limite_diario_horas}</p>
@@ -372,6 +379,36 @@ const CrearEvento = ({ onEventoCreado }) => {
             <Info className="w-4 h-4 flex-shrink-0 text-[#8B5CF6]" />
             <span>No es obligatorio crear una subtarea</span>
           </div>
+
+          {/* Contador de horas en tiempo real */}
+          {(() => {
+            const limite = parseFloat(formEvento.limite_diario_horas);
+            const totalActual = gestiones.reduce((acc, g) => {
+              const hrs = parseFloat(g.horas_estimadas);
+              return acc + (!isNaN(hrs) && hrs > 0 ? hrs : 0);
+            }, 0);
+            const superaLimite = !isNaN(limite) && limite > 0 && totalActual > limite;
+            const tieneHoras = totalActual > 0;
+            if (!tieneHoras) return null;
+            return (
+              <div className={`rounded-xl px-4 py-3 flex items-start gap-2 text-xs font-medium border ${
+                superaLimite
+                  ? 'bg-red-50 border-red-200 text-red-700'
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+              }`}>
+                {superaLimite
+                  ? <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  : <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                }
+                <span>
+                  {superaLimite
+                    ? `Las horas estimadas de las subtareas (${totalActual}h) superan la duración máxima del evento (${limite}h). Reduce las horas de una o varias subtareas para continuar.`
+                    : `Horas usadas: ${totalActual}h${!isNaN(limite) && limite > 0 ? ` de ${limite}h disponibles` : ''}.`
+                  }
+                </span>
+              </div>
+            );
+          })()}
 
           {/* Encabezado de columnas */}
           <div className="hidden sm:grid grid-cols-12 gap-3 px-1 text-slate-400 text-[11px] font-bold uppercase tracking-wider">

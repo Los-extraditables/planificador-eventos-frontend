@@ -1,4 +1,4 @@
-import { AlertCircle, AlertTriangle, Calendar, CalendarClock, CheckCircle2, ClipboardList, Clock, Eye, } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Calendar, CalendarClock, CheckCircle2, ClipboardList, Clock } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CargaGestionWidget from '../components/cargaGestionWidget';
@@ -30,6 +30,8 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
 
   const handleSesionExpirada = () => {
     authService.logout();
+    localStorage.removeItem('token');
+    localStorage.removeItem('refresh_token');
     navigate('/login');
   };
 
@@ -37,7 +39,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
     try {
       setCargando(true);
       setError(null);
-      const token = authService.getToken();
+      const token = localStorage.getItem('token') || authService.getToken();
 
       if (!token) {
         handleSesionExpirada();
@@ -127,13 +129,24 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
   };
 
   // --- DETECCIÓN AUTOMÁTICA E INTERFAZ OPTIMISTA AL REPROGRAMAR ---
-  const actualizarFechaGestion = async (eventoId, gestionId, nuevaFecha) => {
+  const actualizarFechaGestion = async (eventoId, gestionId, nuevaFecha, pospuesto = true) => {
     const eventosAnteriores = [...eventos];
 
     const eventosActualizados = eventos.map((evento) => {
       if (evento.id === eventoId) {
         const actualizarListaGestiones = (lista) =>
-          lista?.map((g) => (g.id === gestionId ? { ...g, plazo: nuevaFecha, fecha: nuevaFecha } : g));
+          lista?.map((g) =>
+            g.id === gestionId
+              ? {
+                  ...g,
+                  plazo: nuevaFecha,
+                  fecha: nuevaFecha,
+                  estado: pospuesto ? 'pospuesto' : g.estado,
+                  nota_pospuesto: pospuesto ? 'Pospuesto por reprogramación' : g.nota_pospuesto,
+                  pospuesto
+                }
+              : g
+          );
 
         return {
           ...evento,
@@ -157,7 +170,10 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ plazo: nuevaFecha })
+        body: JSON.stringify({
+          plazo: nuevaFecha,
+          ...(pospuesto ? { estado: 'pospuesto', nota_pospuesto: 'Pospuesto por reprogramación', pospuesto: true } : {})
+        })
       });
 
       if (!response.ok) throw new Error('Error en el servidor');
@@ -169,13 +185,28 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
     }
   };
 
-  const handleVerDetalle = (eventoId) => {
+  // Reprograma una subtarea al día siguiente y la marca como "Pospuesto"
+  const posponerGestion = (gestion) => {
+    if (!gestion?.eventoId) return;
+
+    const manana = new Date();
+    manana.setDate(manana.getDate() + 1);
+    const yearM = manana.getFullYear();
+    const monthM = String(manana.getMonth() + 1).padStart(2, '0');
+    const dayM = String(manana.getDate()).padStart(2, '0');
+    const mananaStr = `${yearM}-${monthM}-${dayM}`;
+
+    actualizarFechaGestion(gestion.eventoId, gestion.id, mananaStr, true);
+    mostrarMensajeTemporizado('exito', `Gestión "${gestion.descripcion}" pospuesta para mañana.`);
+  };
+
+  const handleVerDetalle = (eventoId, state = {}) => {
     if (!eventoId) return;
 
     if (typeof onVerDetalle === 'function') {
       onVerDetalle('detalle', eventoId);
     } else {
-      navigate(`/detalle-evento/${eventoId}`);
+      navigate(`/detalle-evento/${eventoId}`, { state });
     }
   };
 
@@ -259,7 +290,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
         const dayM = String(manana.getDate()).padStart(2, '0');
         const mananaStr = `${yearM}-${monthM}-${dayM}`;
 
-        actualizarFechaGestion(ultimaTarea.eventoId, ultimaTarea.id, mananaStr);
+        actualizarFechaGestion(ultimaTarea.eventoId, ultimaTarea.id, mananaStr, true);
         mostrarMensajeTemporizado('exito', `Solución aplicada: "${ultimaTarea.descripcion}" se movió para mañana.`);
       }
     }
@@ -499,6 +530,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
                               gestion={gestion}
                               solicitarCompletar={solicitarCompletar}
                               handleVerDetalle={handleVerDetalle}
+                              posponerGestion={posponerGestion}
                               etiqueta="Atrasada"
                               colorTag="bg-red-100 text-red-700 border border-red-200"
                               esAtrasada={true}
@@ -533,6 +565,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
                               gestion={gestion}
                               solicitarCompletar={solicitarCompletar}
                               handleVerDetalle={handleVerDetalle}
+                              posponerGestion={posponerGestion}
                               etiqueta="Para hoy"
                               colorTag="bg-cyan-100 text-cyan-800"
                             />
@@ -566,6 +599,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
                               gestion={gestion}
                               solicitarCompletar={solicitarCompletar}
                               handleVerDetalle={handleVerDetalle}
+                              posponerGestion={posponerGestion}
                               etiqueta="Próxima"
                               colorTag="bg-slate-100 text-slate-600"
                               esProxima={true}
@@ -650,8 +684,16 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
 };
 
 // --- COMPONENTE TARJETA GESTION (LECTURA DE FECHA) ---
-const TarjetaGestion = ({ gestion, solicitarCompletar, handleVerDetalle, etiqueta, colorTag, esAtrasada, esProxima }) => {
+const TarjetaGestion = ({ gestion, solicitarCompletar, handleVerDetalle, posponerGestion, etiqueta, colorTag, esAtrasada, esProxima }) => {
   const fechaValor = gestion.plazo || gestion.fecha;
+
+  // Evalúa cualquier flag enviado por la API o estado local
+  const pospuestoAhora = Boolean(
+    gestion.nota_pospuesto || 
+    gestion.estado === 'pospuesto' || 
+    gestion.pospuesto || 
+    gestion.reprogramado
+  );
 
   // Formatear la fecha a texto amigable (ej: "11 sep. 2026")
   const formatearFecha = (fechaStr) => {
@@ -659,8 +701,8 @@ const TarjetaGestion = ({ gestion, solicitarCompletar, handleVerDetalle, etiquet
     const fechaLimpia = fechaStr.toString().split('T')[0].split(' ')[0];
     const partes = fechaLimpia.split('-');
     if (partes.length < 3) return fechaLimpia;
-    
-    // Crear fecha sin desfasaje por zona horaria
+
+    // crear fecha sin desface horario
     const fechaObj = new Date(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]));
     return fechaObj.toLocaleDateString('es-ES', {
       day: 'numeric',
@@ -687,6 +729,14 @@ const TarjetaGestion = ({ gestion, solicitarCompletar, handleVerDetalle, etiquet
           <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-500 text-xs font-semibold px-2.5 py-0.5 rounded-md">
             <Calendar className="w-3.5 h-3.5 text-purple-500" /> {gestion.eventoNombre}
           </span>
+          
+          {/* Etiqueta Pospuesto solo en la tarjeta de Hoy */}
+          {pospuestoAhora && (
+            <span className="bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
+              Pospuesto
+            </span>
+          )}
+
           {gestion.completada && (
             <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
               ✓ COMPLETADA
@@ -736,14 +786,17 @@ const TarjetaGestion = ({ gestion, solicitarCompletar, handleVerDetalle, etiquet
           <span>{gestion.completada ? 'Completada' : 'Hecha'}</span>
         </button>
 
-        <button
-          type="button"
-          onClick={() => handleVerDetalle(gestion.eventoId)}
-          className="p-2.5 text-slate-400 hover:text-purple-800 hover:bg-purple-50 rounded-xl transition text-lg cursor-pointer"
-          title="Ver detalle del evento"
-        >
-          <Eye className="w-5 h-5 text-slate-400 hover:text-purple-800 transition-colors" />
-        </button>
+        {/* Botón Posponer: solo navega al detalle del evento para posponerlo allí */}
+        {!gestion.completada && (
+          <button
+            type="button"
+            onClick={() => handleVerDetalle(gestion.eventoId || gestion.evento, { esPosponer: true })}
+            className="px-3 py-2 text-xs font-bold text-slate-500 hover:text-purple-800 hover:bg-purple-50 border border-slate-200 hover:border-purple-200 rounded-xl transition cursor-pointer"
+            title="Posponer evento"
+          >
+            Posponer
+          </button>
+        )}
       </div>
     </div>
   );

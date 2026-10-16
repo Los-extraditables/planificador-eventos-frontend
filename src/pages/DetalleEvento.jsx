@@ -12,12 +12,14 @@ import {
   Trash2
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { authService } from '../services/authService';
 
 const DetalleEvento = () => {
   const { id: urlId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const esPosponer = location.state?.esPosponer;
 
   // Fecha local en formato YYYY-MM-DD
   const hoyLocal = new Date();
@@ -46,6 +48,8 @@ const DetalleEvento = () => {
 
   const handleSesionExpirada = () => {
     authService.logout();
+    localStorage.removeItem('token');
+    localStorage.removeItem('refresh_token');
     navigate('/login');
   };
 
@@ -78,7 +82,7 @@ const DetalleEvento = () => {
       setCargando(true);
       setError(null);
 
-      const token = authService.getToken();
+      const token = localStorage.getItem('token') || authService.getToken();
 
       if (!token) {
         handleSesionExpirada();
@@ -177,8 +181,9 @@ const DetalleEvento = () => {
     const token = authService.getToken();
     if (!token) return handleSesionExpirada();
 
-    const nuevaFechaEvento = formEvento.fecha;
-    const fechaAnteriorEvento = eventoActivo.fecha;
+    const fechaAnteriorLimpia = (eventoActivo?.fecha || '').split('T')[0].split(' ')[0];
+    const fechaNuevaLimpia = (formEvento.fecha || '').split('T')[0].split(' ')[0];
+    const cambioFecha = fechaNuevaLimpia !== fechaAnteriorLimpia;
 
     try {
       const response = await fetch(`${API_URL}/eventos/${eventoActivo.id}/`, {
@@ -190,7 +195,7 @@ const DetalleEvento = () => {
         body: JSON.stringify({
           nombre: formEvento.nombre.trim(),
           tipo: formEvento.tipo,
-          fecha: nuevaFechaEvento,
+          fecha: fechaNuevaLimpia,
           limite_diario_horas: parseFloat(formEvento.limite_diario_horas) || 6,
           forzar_sobrecarga: true
         })
@@ -206,24 +211,51 @@ const DetalleEvento = () => {
         throw new Error(formatearError(errData));
       }
 
-      if (nuevaFechaEvento !== fechaAnteriorEvento) {
+      // Si cambió la fecha del evento, actualizamos sus subtareas
+      if (cambioFecha) {
         const gestionesActuales = eventoActivo?.gestiones || eventoActivo?.gestiones_plan || [];
-        
+        let erroresSubtareas = [];
+
         for (const sub of gestionesActuales) {
-          await fetch(`${API_URL}/gestiones/${sub.id}/`, {
+          // Se envía forzar_sobrecarga en la URL y en el cuerpo para garantizar compatibilidad
+          const resSub = await fetch(`${API_URL}/gestiones/${sub.id}/?forzar_sobrecarga=true`, {
             method: 'PATCH',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ plazo: nuevaFechaEvento, forzar_sobrecarga: true })
+            body: JSON.stringify({
+              plazo: fechaNuevaLimpia,
+              estado: 'pospuesto',
+              nota_pospuesto: 'Pospuesto por cambio de fecha del evento',
+              pospuesto: true,
+              forzar_sobrecarga: true,
+              forzar: true
+            })
           });
+
+          if (!resSub.ok) {
+            const errSub = await resSub.json().catch(() => ({}));
+            console.error(`Error actualizando subtarea ${sub.id}:`, errSub);
+            if (resSub.status === 409) {
+              erroresSubtareas.push(`"${sub.descripcion}" excede el límite de horas en esa fecha`);
+            } else {
+              erroresSubtareas.push(`"${sub.descripcion}": ${errSub.mensaje || 'Error al actualizar'}`);
+            }
+          }
+        }
+
+        if (erroresSubtareas.length > 0) {
+          mostrarMensaje('error', `Evento guardado, pero falló en subtareas: ${erroresSubtareas.join(', ')}`);
+          setModalEvento(false);
+          await obtenerEventos();
+          return;
         }
       }
 
       mostrarMensaje('exito', '¡Evento y subtareas actualizados con éxito!');
       setModalEvento(false);
-      obtenerEventos();
+      await obtenerEventos();
     } catch (err) {
       mostrarMensaje('error', err.message);
     }
@@ -250,52 +282,64 @@ const DetalleEvento = () => {
     if (!token) return handleSesionExpirada();
 
     const plazoFinal = eventoActivo?.fecha;
-    const nuevasHoras = parseFloat(formGestion.horas_estimadas) || 0;
+    const nuevasHoras = parseFloat(formGestion.horas_estimadas);
 
     if (!plazoFinal) {
       mostrarMensaje('error', 'El evento activo no tiene una fecha definida.');
       return;
     }
 
-    try {
-      const payloadBase = {
-        descripcion: formGestion.descripcion.trim(),
-        plazo: plazoFinal,
-        horas_estimadas: nuevasHoras,
-        completada: false,
-        forzar_sobrecarga: true
-      };
+    if (!formGestion.descripcion || !formGestion.descripcion.trim()) {
+      mostrarMensaje('error', 'La descripción de la subtarea es obligatoria.');
+      return;
+    }
 
+    if (isNaN(nuevasHoras) || nuevasHoras <= 0) {
+      mostrarMensaje('error', 'Las horas estimadas deben ser un número mayor que cero.');
+      return;
+    }
+
+    // ----- VALIDACIÓN FRONTEND DE HORAS -----
+    const limiteEvento = parseFloat(eventoActivo?.limite_diario_horas);
+    if (!isNaN(limiteEvento) && limiteEvento > 0) {
+      const gestionesActuales = eventoActivo?.gestiones || eventoActivo?.gestiones_plan || [];
+
+      let horasExistentes = 0;
+      for (const g of gestionesActuales) {
+        // Si estamos editando, no contamos las horas anteriores de esa gestión
+        if (modalGestion.modo === 'editar' && g.id === modalGestion.gestionId) continue;
+        const hrs = parseFloat(g.horas_estimadas);
+        if (!isNaN(hrs) && hrs > 0) horasExistentes += hrs;
+      }
+
+      const totalConNuevas = horasExistentes + nuevasHoras;
+
+      if (totalConNuevas > limiteEvento) {
+        mostrarMensaje(
+          'error',
+          `Las horas estimadas de las subtareas (${totalConNuevas}h) superan la duración máxima establecida para este evento (${limiteEvento}h). Reduce las horas para continuar.`
+        );
+        return;
+      }
+    }
+    // ----------------------------------------
+
+    try {
       if (modalGestion.modo === 'crear') {
-        let response = await fetch(`${API_URL}/gestiones/`, {
+        const response = await fetch(`${API_URL}/gestiones/`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
-            ...payloadBase,
-            evento: parseInt(eventoActivo.id, 10),
-            evento_id: parseInt(eventoActivo.id, 10)
+            descripcion: formGestion.descripcion.trim(),
+            plazo: plazoFinal,
+            horas_estimadas: nuevasHoras,
+            completada: false,
+            evento: parseInt(eventoActivo.id, 10)
           })
         });
-
-        if (!response.ok) {
-          const gestionesActuales = eventoActivo?.gestiones || eventoActivo?.gestiones_plan || [];
-          const payloadEvento = {
-            ...eventoActivo,
-            gestiones: [...gestionesActuales, payloadBase]
-          };
-
-          response = await fetch(`${API_URL}/eventos/${eventoActivo.id}/`, {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify(payloadEvento)
-          });
-        }
 
         if (response.status === 401 || response.status === 403) {
           handleSesionExpirada();
@@ -319,7 +363,7 @@ const DetalleEvento = () => {
             descripcion: formGestion.descripcion.trim(),
             plazo: plazoFinal,
             horas_estimadas: nuevasHoras,
-            forzar_sobrecarga: true
+            pospuesto: false
           })
         });
 
@@ -562,7 +606,7 @@ const DetalleEvento = () => {
               </span>
               {eventoActivo?.limite_diario_horas && (
                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-100 px-3 py-1 rounded-full">
-                  <Clock className="w-3.5 h-3.5 text-purple-600" /> Máx. {eventoActivo.limite_diario_horas} hrs/día
+                  <Clock className="w-3.5 h-3.5 text-purple-600" /> Máx. {eventoActivo.limite_diario_horas} hrs (total)
                 </span>
               )}
             </div>
@@ -622,6 +666,11 @@ const DetalleEvento = () => {
                       }`}>
                         {sub.descripcion}
                       </span>
+                      {sub.pospuesto && (
+                        <span className="shrink-0 bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                          Pospuesto
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-3 sm:gap-4 shrink-0 flex-wrap justify-end">
@@ -810,6 +859,37 @@ const DetalleEvento = () => {
                   onChange={(e) => setFormGestion({ ...formGestion, horas_estimadas: e.target.value })}
                 />
               </div>
+
+              {/* Indicador de horas disponibles en tiempo real */}
+              {(() => {
+                const limite = parseFloat(eventoActivo?.limite_diario_horas);
+                if (isNaN(limite) || limite <= 0) return null;
+                const gestionesActuales = eventoActivo?.gestiones || eventoActivo?.gestiones_plan || [];
+                let horasExistentes = 0;
+                for (const g of gestionesActuales) {
+                  if (modalGestion.modo === 'editar' && g.id === modalGestion.gestionId) continue;
+                  const hrs = parseFloat(g.horas_estimadas);
+                  if (!isNaN(hrs) && hrs > 0) horasExistentes += hrs;
+                }
+                const nuevasHrs = parseFloat(formGestion.horas_estimadas);
+                const totalConNuevas = horasExistentes + (!isNaN(nuevasHrs) && nuevasHrs > 0 ? nuevasHrs : 0);
+                const superaLimite = totalConNuevas > limite;
+                return (
+                  <div className={`rounded-xl px-4 py-3 flex items-start gap-2 text-xs font-medium border ${
+                    superaLimite
+                      ? 'bg-red-50 border-red-200 text-red-700'
+                      : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                  }`}>
+                    <AlertCircle className={`w-4 h-4 flex-shrink-0 mt-0.5 ${superaLimite ? 'text-red-500' : 'text-emerald-500'}`} />
+                    <span>
+                      {superaLimite
+                        ? `Las horas estimadas de las subtareas (${totalConNuevas}h) superan el límite del evento (${limite}h). Reduce las horas para continuar.`
+                        : `Horas usadas: ${totalConNuevas}h de ${limite}h disponibles.`
+                      }
+                    </span>
+                  </div>
+                );
+              })()}
 
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                 <button

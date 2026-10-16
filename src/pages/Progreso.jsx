@@ -26,6 +26,8 @@ const Progreso = () => {
 
   const handleSesionExpirada = () => {
     authService.logout();
+    localStorage.removeItem('token');
+    localStorage.removeItem('refresh_token');
     navigate('/login');
   };
 
@@ -38,7 +40,8 @@ const Progreso = () => {
     try {
       setCargando(true);
       setError(null);
-      const token = authService.getToken();
+
+      const token = localStorage.getItem('token') || authService.getToken();
 
       if (!token) {
         handleSesionExpirada();
