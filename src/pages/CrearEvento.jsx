@@ -7,6 +7,13 @@ import { authService } from '../services/authService';
 // Anillo de foco visible y consistente para los controles definidos en este archivo
 const FOCO = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-700 focus-visible:ring-offset-2';
 
+// Los campos usan 16px en móvil para que iOS no haga zoom automático al enfocarlos;
+// w-full/min-w-0 evita que los inputs de fecha y número desborden su contenedor
+const CAMPO = 'w-full min-w-0 !text-base sm:!text-sm';
+
+// Áreas táctiles de 44px en móvil/tablet
+const TACTIL = 'min-h-[44px] md:min-h-0';
+
 const nuevaGestion = () => ({ id: Date.now() + Math.random(), descripcion: '', plazo: '', horas_estimadas: '' });
 
 const CrearEvento = ({ onEventoCreado }) => {
@@ -223,7 +230,7 @@ const CrearEvento = ({ onEventoCreado }) => {
 
   const MensajeError = ({ campo }) =>
     errores[campo] ? (
-      <p id={`error-${campo}`} role="alert" className={UI.error}>
+      <p id={`error-${campo}`} role="alert" className={`${UI.error} break-words`}>
         {errores[campo]}
       </p>
     ) : null;
@@ -233,10 +240,10 @@ const CrearEvento = ({ onEventoCreado }) => {
   );
 
   return (
-    <div className={UI.pagina}>
+    <div className={`${UI.pagina} min-w-0 max-w-full overflow-x-hidden`}>
       {/* Aviso visible (oculto al lector de pantalla para no duplicar) */}
       {mensaje.texto && (
-        <div aria-hidden="true">
+        <div aria-hidden="true" className="break-words">
           <Aviso tipo={mensaje.tipo} texto={mensaje.texto} />
         </div>
       )}
@@ -253,9 +260,9 @@ const CrearEvento = ({ onEventoCreado }) => {
         subtitulo="Registra los datos generales del evento y añade sus subtareas."
       />
 
-      <form onSubmit={handleSubmit} noValidate aria-busy={cargando} className="space-y-6">
+      <form onSubmit={handleSubmit} noValidate aria-busy={cargando} className="space-y-4 sm:space-y-6">
         {/* SECCIÓN 1: DATOS DEL EVENTO */}
-        <section aria-labelledby="titulo-datos-evento" className={`${UI.tarjeta} space-y-6`}>
+        <section aria-labelledby="titulo-datos-evento" className={`${UI.tarjeta} space-y-5 sm:space-y-6 min-w-0`}>
           <h2 id="titulo-datos-evento" className={UI.h2}>Datos del evento</h2>
           <p className="text-xs text-slate-600">
             Los campos marcados con <span aria-hidden="true" className="text-red-700">*</span>
@@ -264,7 +271,7 @@ const CrearEvento = ({ onEventoCreado }) => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
             {/* Nombre del Evento */}
-            <div>
+            <div className="min-w-0">
               <label htmlFor="campo-nombre" className={UI.label}>
                 Nombre del evento <Asterisco />
               </label>
@@ -272,7 +279,7 @@ const CrearEvento = ({ onEventoCreado }) => {
                 type="text"
                 placeholder="Ej. Lanzamiento Producto X"
                 autoComplete="off"
-                className={`${errores.nombre ? UI.inputError : UI.input} ${FOCO}`}
+                className={`${errores.nombre ? UI.inputError : UI.input} ${CAMPO} ${FOCO}`}
                 value={formEvento.nombre}
                 {...propsCampo('nombre')}
                 onChange={(e) => {
@@ -284,12 +291,12 @@ const CrearEvento = ({ onEventoCreado }) => {
             </div>
 
             {/* Tipo de Evento */}
-            <div>
+            <div className="min-w-0">
               <label htmlFor="campo-tipo" className={UI.label}>
                 Tipo <Asterisco />
               </label>
               <select
-                className={`${errores.tipo ? UI.inputError : UI.input} cursor-pointer ${FOCO}`}
+                className={`${errores.tipo ? UI.inputError : UI.input} ${CAMPO} cursor-pointer ${FOCO}`}
                 value={formEvento.tipo}
                 {...propsCampo('tipo')}
                 onChange={(e) => {
@@ -307,14 +314,14 @@ const CrearEvento = ({ onEventoCreado }) => {
             </div>
 
             {/* Fecha límite del Evento */}
-            <div>
+            <div className="min-w-0">
               <label htmlFor="campo-fecha" className={UI.label}>
                 Fecha límite del evento <Asterisco />
               </label>
               <input
                 type="date"
                 min={hoyStr}
-                className={`${errores.fecha ? UI.inputError : UI.input} ${FOCO}`}
+                className={`${errores.fecha ? UI.inputError : UI.input} ${CAMPO} ${FOCO}`}
                 value={formEvento.fecha}
                 {...propsCampo('fecha')}
                 onChange={(e) => {
@@ -326,17 +333,19 @@ const CrearEvento = ({ onEventoCreado }) => {
             </div>
 
             {/* Límite diario de carga de trabajo */}
-            <div>
+            <div className="min-w-0">
               <label htmlFor="campo-limite_diario_horas" className={UI.label}>
                 Límite diario de carga de trabajo (horas) <Asterisco />
               </label>
               <div className="relative">
+                {/* En móvil el sufijo se reduce a "h" para no pisar el valor escrito */}
                 <input
                   type="number"
                   step="0.5"
                   min="0.5"
+                  inputMode="decimal"
                   placeholder="Ej. 6"
-                  className={`${errores.limite_diario_horas ? UI.inputError : UI.input} pr-40 ${FOCO}`}
+                  className={`${errores.limite_diario_horas ? UI.inputError : UI.input} ${CAMPO} pr-14 sm:pr-40 ${FOCO}`}
                   value={formEvento.limite_diario_horas}
                   {...propsCampo('limite_diario_horas', 'ayuda-limite')}
                   onChange={(e) => {
@@ -349,11 +358,12 @@ const CrearEvento = ({ onEventoCreado }) => {
                   aria-hidden="true"
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs font-medium pointer-events-none flex items-center gap-1"
                 >
-                  <Clock className="w-3.5 h-3.5" /> h (límite total)
+                  <Clock className="w-3.5 h-3.5 hidden sm:block" /> h
+                  <span className="hidden sm:inline">(límite total)</span>
                 </span>
               </div>
-              <p id="ayuda-limite" className="text-xs text-slate-600 mt-2 font-medium flex items-center gap-1.5">
-                <Info className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              <p id="ayuda-limite" className="text-xs text-slate-600 mt-2 font-medium flex items-start sm:items-center gap-1.5">
+                <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 sm:mt-0" aria-hidden="true" />
                 Total máximo de horas estimadas para todas las subtareas.
               </p>
               <MensajeError campo="limite_diario_horas" />
@@ -362,7 +372,7 @@ const CrearEvento = ({ onEventoCreado }) => {
         </section>
 
         {/* SECCIÓN 2: SUBTAREAS INICIALES */}
-        <section aria-labelledby="titulo-subtareas" className={`${UI.tarjeta} space-y-6`}>
+        <section aria-labelledby="titulo-subtareas" className={`${UI.tarjeta} space-y-5 sm:space-y-6 min-w-0`}>
           <div>
             <h2 id="titulo-subtareas" className={UI.h2}>Subtareas iniciales</h2>
             <p className={UI.subtitulo}>Define las subtareas necesarias para organizar el evento.</p>
@@ -378,20 +388,20 @@ const CrearEvento = ({ onEventoCreado }) => {
           <div role="status" aria-live="polite">
             {horasAsignadasTotal > 0 && (
               <div
-                className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+                className={`p-3 sm:p-4 rounded-2xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
                   hayExcesoGlobal
                     ? 'bg-red-50/70 border-red-200 text-red-950'
                     : 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
                 }`}
               >
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-start sm:items-center gap-2.5 min-w-0">
                   <Clock
                     aria-hidden="true"
-                    className={`w-4 h-4 shrink-0 ${
+                    className={`w-4 h-4 shrink-0 mt-0.5 sm:mt-0 ${
                       hayExcesoGlobal ? 'text-red-700' : 'text-emerald-700'
                     }`}
                   />
-                  <p className="text-xs font-medium">
+                  <p className="text-xs font-medium min-w-0">
                     {hayExcesoGlobal ? (
                       <>
                         Asignaste <strong>{horasAsignadasTotal} h</strong> y el límite es{' '}
@@ -421,10 +431,10 @@ const CrearEvento = ({ onEventoCreado }) => {
             )}
           </div>
 
-          {/* TÍTULOS DE COLUMNAS (visuales; cada campo ya tiene su propia etiqueta accesible) */}
+          {/* TÍTULOS DE COLUMNAS: solo en tablet/escritorio (en móvil cada campo muestra su propia etiqueta) */}
           <div
             aria-hidden="true"
-            className="hidden sm:grid grid-cols-12 gap-3 px-1 text-slate-600 text-xs font-bold uppercase tracking-wider"
+            className="hidden md:grid grid-cols-12 gap-3 px-1 text-slate-600 text-xs font-bold uppercase tracking-wider"
           >
             <span className="col-span-6">NOMBRE DE LA SUBTAREA</span>
             <span className="col-span-3">PLAZO</span>
@@ -432,18 +442,19 @@ const CrearEvento = ({ onEventoCreado }) => {
             <span className="col-span-1"></span>
           </div>
 
-          {/* LISTADO DE SUBTAREAS */}
-          <div className="space-y-4">
+          {/* LISTADO DE SUBTAREAS: tarjetas apiladas hasta md; fila de 12 columnas desde md */}
+          <div className="space-y-3 md:space-y-4">
             {gestiones.map((gest, i) => (
               <div
                 key={gest.id}
                 role="group"
                 aria-label={`Subtarea ${i + 1}`}
-                className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center"
+                className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3 md:items-center
+                  border border-slate-200 rounded-2xl p-3 sm:p-4 md:border-0 md:rounded-none md:p-0"
               >
                 {/* Nombre */}
-                <div className="sm:col-span-6">
-                  <label htmlFor={`subtarea-descripcion-${gest.id}`} className="sr-only">
+                <div className="sm:col-span-2 md:col-span-6 min-w-0">
+                  <label htmlFor={`subtarea-descripcion-${gest.id}`} className="block text-xs font-semibold text-slate-700 mb-1 md:sr-only">
                     Nombre de la subtarea {i + 1}
                   </label>
                   <input
@@ -451,15 +462,15 @@ const CrearEvento = ({ onEventoCreado }) => {
                     type="text"
                     placeholder="Ej. Confirmar catering"
                     autoComplete="off"
-                    className={`${UI.input} ${FOCO}`}
+                    className={`${UI.input} ${CAMPO} ${FOCO}`}
                     value={gest.descripcion}
                     onChange={(e) => handleGestionChange(gest.id, 'descripcion', e.target.value)}
                   />
                 </div>
 
                 {/* Plazo */}
-                <div className="sm:col-span-3">
-                  <label htmlFor={`subtarea-plazo-${gest.id}`} className="sr-only">
+                <div className="md:col-span-3 min-w-0">
+                  <label htmlFor={`subtarea-plazo-${gest.id}`} className="block text-xs font-semibold text-slate-700 mb-1 md:sr-only">
                     Plazo de la subtarea {i + 1}
                   </label>
                   <input
@@ -467,15 +478,15 @@ const CrearEvento = ({ onEventoCreado }) => {
                     type="date"
                     min={hoyStr}
                     max={formEvento.fecha || undefined}
-                    className={`${UI.input} ${FOCO}`}
+                    className={`${UI.input} ${CAMPO} ${FOCO}`}
                     value={gest.plazo}
                     onChange={(e) => handleGestionChange(gest.id, 'plazo', e.target.value)}
                   />
                 </div>
 
                 {/* Horas estimadas */}
-                <div className="sm:col-span-2">
-                  <label htmlFor={`subtarea-horas-${gest.id}`} className="sr-only">
+                <div className="md:col-span-2 min-w-0">
+                  <label htmlFor={`subtarea-horas-${gest.id}`} className="block text-xs font-semibold text-slate-700 mb-1 md:sr-only">
                     Horas estimadas de la subtarea {i + 1}
                   </label>
                   <input
@@ -483,22 +494,24 @@ const CrearEvento = ({ onEventoCreado }) => {
                     type="number"
                     step="0.5"
                     min="0"
+                    inputMode="decimal"
                     placeholder="Ej. 2.5"
-                    className={`${UI.input} ${FOCO}`}
+                    className={`${UI.input} ${CAMPO} ${FOCO}`}
                     value={gest.horas_estimadas}
                     onChange={(e) => handleGestionChange(gest.id, 'horas_estimadas', e.target.value)}
                   />
                 </div>
 
-                {/* Eliminar */}
-                <div className="sm:col-span-1 flex justify-end sm:justify-center">
+                {/* Eliminar: en móvil lleva texto visible; en escritorio solo el icono */}
+                <div className="sm:col-span-2 md:col-span-1 flex justify-end md:justify-center">
                   <button
                     type="button"
                     onClick={() => handleEliminarSubtarea(gest.id)}
-                    className={`p-1.5 text-slate-600 hover:text-red-700 rounded-lg transition cursor-pointer ${FOCO}`}
+                    className={`inline-flex items-center justify-center gap-1.5 px-3 md:px-1.5 py-1.5 min-h-[44px] md:min-h-0 text-sm text-slate-600 hover:text-red-700 rounded-lg transition cursor-pointer ${FOCO}`}
                     aria-label={`Eliminar subtarea ${i + 1}`}
                   >
                     <Trash2 className="w-4 h-4" aria-hidden="true" />
+                    <span className="md:hidden" aria-hidden="true">Eliminar</span>
                   </button>
                 </div>
               </div>
@@ -509,19 +522,19 @@ const CrearEvento = ({ onEventoCreado }) => {
             id="btn-agregar-subtarea"
             type="button"
             onClick={handleAgregarSubtarea}
-            className={`${UI.btnAgregarSm} ${FOCO}`}
+            className={`${UI.btnAgregarSm} ${FOCO} w-full sm:w-auto justify-center ${TACTIL}`}
           >
             <Plus className="w-4 h-4" aria-hidden="true" /> Agregar otra subtarea
           </button>
         </section>
 
-        {/* BOTONES FINALES */}
-        <div className="flex items-center justify-end gap-3 pt-2">
-          <button type="button" onClick={limpiarFormulario} className={`${UI.btnSecundario} ${FOCO}`}>
+        {/* BOTONES FINALES: apilados a ancho completo en móvil (acción principal arriba) */}
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-3 pt-2">
+          <button type="button" onClick={limpiarFormulario} className={`${UI.btnSecundario} ${FOCO} w-full sm:w-auto justify-center ${TACTIL}`}>
             Limpiar formulario
           </button>
 
-          <button type="submit" disabled={cargando} className={`${UI.btnPrimario} ${FOCO}`}>
+          <button type="submit" disabled={cargando} className={`${UI.btnPrimario} ${FOCO} w-full sm:w-auto justify-center ${TACTIL}`}>
             {cargando ? 'Guardando...' : 'Guardar evento'}
           </button>
         </div>
