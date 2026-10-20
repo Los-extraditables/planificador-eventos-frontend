@@ -94,6 +94,10 @@ const armarCambio = (accion, { fecha, nota } = {}) => {
   };
 };
 
+// Mensaje cuando la nueva fecha supera la fecha del evento
+const mensajeFechaExcedida = (fechaEvento) =>
+  `No es posible posponer: la nueva fecha supera la fecha del evento (${formatearFechaDisplay(fechaEvento)}).`;
+
 /* ===================== Etiqueta de pospuesta (igual que en Detalle y Progreso) ===================== */
 const EtiquetaPospuestas = ({ cantidad, texto }) => {
   if (!cantidad && !texto) return null;
@@ -113,8 +117,9 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
 
   const completada = Boolean(gestion.completada);
   const minFecha = fechaOffsetStr(1);
-  const limiteEvento = limpiarFecha(eventoFecha);
-  const maxFecha = limiteEvento && limiteEvento >= minFecha ? limiteEvento : undefined;
+  // Siempre se respeta la fecha del evento como límite máximo
+  const maxFecha = limpiarFecha(eventoFecha) || undefined;
+  const sinMargen = Boolean(maxFecha && maxFecha < minFecha);
 
   const cerrar = () => {
     setAbierto(false);
@@ -140,8 +145,8 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
   const confirmarPosponer = async (e) => {
     e.preventDefault();
     if (!form.fecha) return setErrorFecha('Selecciona la nueva fecha.');
+    if (maxFecha && form.fecha > maxFecha) return setErrorFecha(mensajeFechaExcedida(maxFecha));
     if (form.fecha < minFecha) return setErrorFecha('La nueva fecha debe ser posterior a hoy.');
-    if (maxFecha && form.fecha > maxFecha) return setErrorFecha('La fecha no puede superar la fecha límite del evento.');
     cerrar();
     await ejecutar('pospuesto', { fecha: form.fecha, nota: form.nota });
   };
@@ -221,7 +226,14 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
                   />
                 </div>
                 {errorFecha && <p className={UI.error}>{errorFecha}</p>}
-                {maxFecha && !errorFecha && <p className="text-[11px] text-slate-400 mt-1.5">Puedes elegir hasta la fecha límite del evento.</p>}
+                {maxFecha && !errorFecha && !sinMargen && (
+                  <p className="text-[11px] text-slate-400 mt-1.5">Puedes elegir hasta la fecha límite del evento.</p>
+                )}
+                {sinMargen && !errorFecha && (
+                  <p className="text-[11px] text-amber-700 mt-1.5">
+                    No es posible posponer: el evento ya no tiene fechas disponibles ({formatearFechaDisplay(maxFecha)}).
+                  </p>
+                )}
               </div>
 
               <div>
@@ -477,9 +489,19 @@ const Hoy = ({ onCrearEvento, setPestanaActiva }) => {
 
   // --- Registrar avance (Hecha / Pendiente / Pospuesta): optimista + PATCH a DRF ---
   const registrar = async (gestion, accion, datos = {}) => {
+    const evento = eventos.find((e) => gestionesDe(e).some((g) => g.id === gestion.id));
+
+    // Protección: no se puede posponer más allá de la fecha del evento
+    if (accion === 'pospuesto' && evento) {
+      const limite = limpiarFecha(evento.fecha);
+      if (limite && datos.fecha > limite) {
+        mostrarMensaje('error', `No es posible posponer "${gestion.descripcion}": la nueva fecha supera la fecha del evento (${formatearFechaDisplay(limite)}).`);
+        return { ok: false };
+      }
+    }
+
     const { cambios, body } = armarCambio(accion, datos);
     const anterior = Object.fromEntries(Object.keys(cambios).map((k) => [k, gestion[k]]));
-    const evento = eventos.find((e) => gestionesDe(e).some((g) => g.id === gestion.id));
 
     enVuelo.current += 1;
     aplicarCambio(gestion.id, cambios);
