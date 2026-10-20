@@ -105,6 +105,16 @@ const armarCambio = (accion, { fecha, nota } = {}) => {
   };
 };
 
+/* ===================== Etiqueta de pospuestas (igual que en Progreso) ===================== */
+const EtiquetaPospuestas = ({ cantidad, texto }) => {
+  if (!cantidad && !texto) return null;
+  return (
+    <span className="inline-flex items-center bg-amber-100 text-amber-800 border border-amber-200 text-[10px] leading-4 font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
+      {texto || `${cantidad} ${cantidad === 1 ? 'pospuesta' : 'pospuestas'}`}
+    </span>
+  );
+};
+
 /* ========================= Barra de progreso ========================= */
 const ALTURAS = { sm: 'h-2', md: 'h-2.5', lg: 'h-3' };
 
@@ -113,7 +123,10 @@ const BarraProgreso = ({ completadas, total, pospuestas = 0, titulo, tamano = 'm
   return (
     <div className={`space-y-1.5 ${className}`}>
       <div className="flex items-center justify-between gap-3 text-xs font-bold text-slate-600">
-        <span className={ocultarTitulo ? 'sr-only' : ''}>{titulo}</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={ocultarTitulo ? 'sr-only' : ''}>{titulo}</span>
+          <EtiquetaPospuestas cantidad={pospuestas} />
+        </div>
         <span className="text-slate-900 font-extrabold ml-auto">
           {completadas}/{total} subtareas <span className="text-purple-700 ml-1">{porcentaje}%</span>
         </span>
@@ -129,14 +142,6 @@ const BarraProgreso = ({ completadas, total, pospuestas = 0, titulo, tamano = 'm
       >
         <div className="h-full bg-[#7E22CE] rounded-full transition-all duration-500 motion-reduce:transition-none" style={{ width: `${porcentaje}%` }} />
       </div>
-      {pospuestas > 0 && (
-        <div className="flex justify-end pt-1">
-          <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-bold px-2.5 py-1 rounded-full">
-            <CalendarClock className="w-3 h-3 text-amber-600" />
-            {pospuestas} {pospuestas === 1 ? 'pospuesta' : 'pospuestas'}
-          </span>
-        </div>
-      )}
     </div>
   );
 };
@@ -800,12 +805,7 @@ const DetalleEvento = () => {
                   <div className="space-y-1.5 min-w-0">
                     <div className="flex items-center gap-2.5 flex-wrap">
                       <h3 className="text-base font-extrabold text-slate-900 group-hover:text-[#7E22CE] transition">{ev.nombre}</h3>
-                      {p.pospuestas > 0 && (
-                        <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-bold px-2.5 py-1 rounded-full">
-                          <CalendarClock className="w-3 h-3 text-amber-600" />
-                          {p.pospuestas} {p.pospuestas === 1 ? 'pospuesta' : 'pospuestas'}
-                        </span>
-                      )}
+                      <EtiquetaPospuestas cantidad={p.pospuestas} />
                     </div>
                     <p className="text-xs text-slate-500 font-medium">
                       {ev.tipo || ev.categoria || 'Evento'} • Límite: {ev.fecha ? formatearFechaDisplay(ev.fecha) : 'Sin fecha'}
@@ -881,12 +881,7 @@ const DetalleEvento = () => {
                           >
                             {sub.descripcion}
                           </span>
-                          {pospuesta && (
-                            <span className="shrink-0 inline-flex items-center gap-1 bg-amber-100 text-amber-800 border border-amber-200 text-[11px] font-bold px-2.5 py-1 rounded-full">
-                              <CalendarClock className="w-3 h-3" />
-                              Pospuesta
-                            </span>
-                          )}
+                          {pospuesta && <EtiquetaPospuestas texto="Pospuesta" />}
                         </div>
 
                         <div className="flex items-center gap-3 sm:gap-4 flex-wrap lg:justify-end">

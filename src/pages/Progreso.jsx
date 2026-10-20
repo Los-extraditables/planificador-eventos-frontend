@@ -49,6 +49,16 @@ const calcularProgreso = (gestiones = []) => {
   };
 };
 
+/* ===================== Etiqueta de pospuestas (igual que en detalle) ===================== */
+const EtiquetaPospuestas = ({ cantidad }) => {
+  if (!cantidad) return null;
+  return (
+    <span className="inline-flex items-center bg-amber-100 text-amber-800 border border-amber-200 text-[10px] leading-4 font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
+      {cantidad} {cantidad === 1 ? 'pospuesta' : 'pospuestas'}
+    </span>
+  );
+};
+
 /* ========================= Barra de progreso ========================= */
 const ALTURAS = { sm: 'h-2', md: 'h-2.5', lg: 'h-3' };
 
@@ -76,9 +86,9 @@ const BarraProgreso = ({ completadas, total, pospuestas = 0, titulo, tamano = 'm
         <div className="h-full bg-[#7E22CE] rounded-full transition-all duration-500 motion-reduce:transition-none" style={{ width: `${porcentaje}%` }} />
       </div>
       {pospuestas > 0 && (
-        <p className="text-[11px] font-medium text-amber-700">
-          {pospuestas} {pospuestas === 1 ? 'pospuesta' : 'pospuestas'}
-        </p>
+        <div className="flex justify-end pt-1">
+          <EtiquetaPospuestas cantidad={pospuestas} />
+        </div>
       )}
     </div>
   );
@@ -344,9 +354,12 @@ const Progreso = () => {
                 </div>
                 <span className="text-xs font-semibold text-slate-500">Cumplimiento global</span>
               </div>
-              <div className="space-y-2">
-                <p className="text-3xl font-extrabold text-slate-900 tracking-tight">{global.porcentaje}%</p>
-                <BarraProgreso completadas={global.completadas} total={global.total} pospuestas={global.pospuestas} titulo="Cumplimiento global" tamano="sm" ocultarCabecera />
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-3xl font-extrabold text-slate-900 tracking-tight">{global.porcentaje}%</p>
+                  <EtiquetaPospuestas cantidad={global.pospuestas} />
+                </div>
+                <BarraProgreso completadas={global.completadas} total={global.total} titulo="Cumplimiento global" tamano="sm" ocultarCabecera />
               </div>
             </div>
           </div>
@@ -363,12 +376,13 @@ const Progreso = () => {
                 {eventosCalculados.map((evento) => (
                   <div key={evento.id} className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm space-y-4 hover:shadow-md transition-all">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="space-y-1">
+                      <div className="space-y-1 min-w-0">
                         <div className="flex items-center gap-2.5 flex-wrap">
                           <h3 className="text-base font-extrabold text-slate-900">{evento.nombre}</h3>
                           <span className="px-3 py-0.5 bg-[#F3E8FF] text-[#7E22CE] border border-[#E9D5FF] rounded-full text-[11px] font-bold">
                             {evento.estado || 'En preparación'}
                           </span>
+                          <EtiquetaPospuestas cantidad={evento.progreso.pospuestas} />
                         </div>
                         <p className="text-xs text-slate-400 font-medium">{evento.categoria || evento.tipo || 'Social'}</p>
                       </div>
@@ -397,7 +411,6 @@ const Progreso = () => {
                     <BarraProgreso
                       completadas={evento.progreso.completadas}
                       total={evento.progreso.total}
-                      pospuestas={evento.progreso.pospuestas}
                       titulo={`Progreso de ${evento.nombre}`}
                       ocultarTitulo
                     />
