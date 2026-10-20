@@ -379,7 +379,7 @@ const Progreso = () => {
                       <div className="space-y-1 min-w-0">
                         <div className="flex items-center gap-2.5 flex-wrap">
                           <h3 className="text-base font-extrabold text-slate-900">{evento.nombre}</h3>
-                          <span className="px-3 py-0.5 bg-[#F3E8FF] text-[#7E22CE] border border-[#E9D5FF] rounded-full text-[11px] font-bold">
+                          <span className="inline-flex items-center px-2 py-0.5 bg-[#F3E8FF] text-[#7E22CE] border border-[#E9D5FF] rounded-full text-[10px] leading-4 font-bold whitespace-nowrap">
                             {evento.estado || 'En preparación'}
                           </span>
                           <EtiquetaPospuestas cantidad={evento.progreso.pospuestas} />

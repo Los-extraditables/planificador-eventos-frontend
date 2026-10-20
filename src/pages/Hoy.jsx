@@ -103,6 +103,16 @@ const armarCambio = (accion, { fecha, nota } = {}) => {
   };
 };
 
+/* ===================== Etiqueta de pospuesta (igual que en Detalle y Progreso) ===================== */
+const EtiquetaPospuestas = ({ cantidad, texto }) => {
+  if (!cantidad && !texto) return null;
+  return (
+    <span className="inline-flex items-center bg-amber-100 text-amber-800 border border-amber-200 text-[10px] leading-4 font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
+      {texto || `${cantidad} ${cantidad === 1 ? 'pospuesta' : 'pospuestas'}`}
+    </span>
+  );
+};
+
 /* ===================== Control Hecha / Posponer ===================== */
 // Hecha alterna completada/pendiente. Posponer abre un modal con fecha (obligatoria) y nota (opcional).
 const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
@@ -382,9 +392,7 @@ const TarjetaGestion = ({ gestion, cfg, prioridad, onRegistrar }) => {
             <Calendar className="w-3.5 h-3.5" /> {gestion.eventoNombre}
           </span>
 
-          {pospuesta && (
-            <span className="bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-full">Pospuesto</span>
-          )}
+          {pospuesta && <EtiquetaPospuestas texto="Pospuesta" />}
 
           {gestion.completada && (
             <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-full">✓ Completada</span>
