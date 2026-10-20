@@ -82,7 +82,13 @@ const DetalleEvento = () => {
       setCargando(true);
       setError(null);
 
-      const token = localStorage.getItem('token') || authService.getToken();
+      // Verificación robusta de token para evitar expulsiones falsas
+      let token = localStorage.getItem('token') || authService.getToken();
+
+      if (!token) {
+        await new Promise(res => setTimeout(res, 500));
+        token = localStorage.getItem('token') || authService.getToken();
+      }
 
       if (!token) {
         handleSesionExpirada();
@@ -97,6 +103,10 @@ const DetalleEvento = () => {
       });
 
       if (response.status === 401 || response.status === 403) {
+        if (reintento) {
+          await new Promise(res => setTimeout(res, 1000));
+          return obtenerEventos(false);
+        }
         handleSesionExpirada();
         return;
       }
@@ -211,13 +221,11 @@ const DetalleEvento = () => {
         throw new Error(formatearError(errData));
       }
 
-      // Si cambió la fecha del evento, actualizamos sus subtareas
       if (cambioFecha) {
         const gestionesActuales = eventoActivo?.gestiones || eventoActivo?.gestiones_plan || [];
         let erroresSubtareas = [];
 
         for (const sub of gestionesActuales) {
-          // Se envía forzar_sobrecarga en la URL y en el cuerpo para garantizar compatibilidad
           const resSub = await fetch(`${API_URL}/gestiones/${sub.id}/?forzar_sobrecarga=true`, {
             method: 'PATCH',
             headers: {
@@ -299,14 +307,12 @@ const DetalleEvento = () => {
       return;
     }
 
-    // ----- VALIDACIÓN FRONTEND DE HORAS -----
     const limiteEvento = parseFloat(eventoActivo?.limite_diario_horas);
     if (!isNaN(limiteEvento) && limiteEvento > 0) {
       const gestionesActuales = eventoActivo?.gestiones || eventoActivo?.gestiones_plan || [];
 
       let horasExistentes = 0;
       for (const g of gestionesActuales) {
-        // Si estamos editando, no contamos las horas anteriores de esa gestión
         if (modalGestion.modo === 'editar' && g.id === modalGestion.gestionId) continue;
         const hrs = parseFloat(g.horas_estimadas);
         if (!isNaN(hrs) && hrs > 0) horasExistentes += hrs;
@@ -317,12 +323,11 @@ const DetalleEvento = () => {
       if (totalConNuevas > limiteEvento) {
         mostrarMensaje(
           'error',
-          `Las horas estimadas de las subtareas (${totalConNuevas}h) superan la duración máxima establecida para este evento (${limiteEvento}h). Reduce las horas para continuar.`
+          `Las horas estimadas de las subtareas (${totalConNuevas}h) superan la duración máxima establecida para este evento (${limiteEvento}h).`
         );
         return;
       }
     }
-    // ----------------------------------------
 
     try {
       if (modalGestion.modo === 'crear') {
@@ -416,7 +421,6 @@ const DetalleEvento = () => {
     }
   };
 
-  // --- ESTILO DE CARGA SKELETON ---
   if (cargando) {
     return (
       <div className="max-w-5xl mx-auto p-4 sm:p-6 md:p-8 font-sans text-slate-800 text-left bg-slate-50/50 min-h-screen">
@@ -479,7 +483,6 @@ const DetalleEvento = () => {
   return (
     <div className="max-w-5xl mx-auto p-4 sm:p-6 md:p-8 font-sans text-slate-800 text-left bg-slate-50/50 min-h-screen space-y-6">
       
-      {/* Alerta de Mensajes Flotantes */}
       {mensaje.texto && (
         <div className={`p-4 rounded-2xl text-sm font-semibold flex items-center gap-2.5 shadow-sm transition-all ${
           mensaje.tipo === 'exito' 
@@ -495,7 +498,6 @@ const DetalleEvento = () => {
         </div>
       )}
 
-      {/* Top Header: Volver a Hoy + Selector + Botón Editar (Solo si hay evento seleccionado) */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <button
           onClick={() => navigate('/hoy')}
@@ -505,7 +507,6 @@ const DetalleEvento = () => {
         </button>
 
         <div className="flex items-center gap-3 flex-wrap">
-          {/* Selector de Evento Estilizado (Con opción Todos los eventos) */}
           <div className="flex items-center gap-2 bg-white border border-slate-200/90 rounded-xl px-3 py-2 shadow-sm">
             <SlidersHorizontal className="w-4 h-4 text-slate-400 flex-shrink-0" />
             <select
@@ -520,7 +521,6 @@ const DetalleEvento = () => {
             </select>
           </div>
 
-          {/* Botón Editar Evento (Solo aparece si se está viendo un evento específico) */}
           {eventoSeleccionadoId !== 'todos' && eventoActivo && (
             <button
               onClick={handleAbrirEditarEvento}
@@ -532,7 +532,6 @@ const DetalleEvento = () => {
         </div>
       </div>
 
-      {/* VISTA 1: MOSTRAR TODOS LOS EVENTOS (Evita saturación de información) */}
       {eventoSeleccionadoId === 'todos' ? (
         <div className="space-y-4">
           <div>
@@ -586,9 +585,7 @@ const DetalleEvento = () => {
           </div>
         </div>
       ) : (
-        /* VISTA 2: DISEÑO A DETALLE DE UN EVENTO ESPECÍFICO (Sin cambios respecto al diseño original) */
         <>
-          {/* Título e Información del Evento */}
           <div className="space-y-3">
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
               {eventoActivo?.nombre}
@@ -612,7 +609,6 @@ const DetalleEvento = () => {
             </div>
           </div>
 
-          {/* Tarjeta de Progreso */}
           <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm space-y-3">
             <div className="flex justify-between items-center text-xs font-bold text-slate-600">
               <span className="uppercase tracking-wider">Progreso del evento</span>
@@ -626,7 +622,6 @@ const DetalleEvento = () => {
             </div>
           </div>
 
-          {/* Lista de Subtareas */}
           <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm space-y-5">
             <div className="flex justify-between items-center pb-4 border-b border-slate-100">
               <div>
@@ -781,7 +776,8 @@ const DetalleEvento = () => {
                 <input
                   type="number"
                   step="0.5"
-                  min="0.5"
+                  min="1"
+                  max="24"
                   required
                   className="w-full px-4 py-3 bg-[#F8FAFC] border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600 transition"
                   value={formEvento.limite_diario_horas}
@@ -789,17 +785,17 @@ const DetalleEvento = () => {
                 />
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setModalEvento(false)}
-                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
+                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 bg-[#7E22CE] hover:bg-[#6B21A8] text-white font-bold rounded-xl text-xs transition shadow-sm cursor-pointer"
+                  className="px-5 py-2.5 bg-[#7E22CE] hover:bg-[#6B21A8] text-white font-bold text-xs rounded-xl shadow-sm transition cursor-pointer"
                 >
                   Guardar Cambios
                 </button>
@@ -809,12 +805,12 @@ const DetalleEvento = () => {
         </div>
       )}
 
-      {/* MODAL: CREAR / EDITAR SUBTAREA */}
+      {/* MODAL: CREAR / EDITAR SUBTAREA (GESTIÓN) */}
       {modalGestion.abierto && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-6 sm:p-8 w-full max-w-md shadow-2xl border border-slate-100 space-y-5 text-left">
+          <div className="bg-white rounded-2xl p-6 sm:p-8 w-full max-w-lg shadow-2xl border border-slate-100 space-y-5 text-left">
             <h3 className="text-lg font-bold text-slate-900 pb-3 border-b border-slate-100">
-              {modalGestion.modo === 'crear' ? 'Añadir Nueva Subtarea' : 'Editar Subtarea'}
+              {modalGestion.modo === 'crear' ? 'Nueva Subtarea' : 'Editar Subtarea'}
             </h3>
             
             <form onSubmit={handleGuardarGestion} className="space-y-4">
@@ -825,22 +821,10 @@ const DetalleEvento = () => {
                 <input
                   type="text"
                   required
-                  placeholder="Ej. Búsqueda y cotización"
+                  placeholder="Ej. Comprar decoración, Enviar invitaciones..."
                   className="w-full px-4 py-3 bg-[#F8FAFC] border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600 transition"
                   value={formGestion.descripcion}
                   onChange={(e) => setFormGestion({ ...formGestion, descripcion: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                  Plazo Límite <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  disabled
-                  className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-500 cursor-not-allowed"
-                  value={eventoActivo?.fecha || formGestion.plazo || ''}
                 />
               </div>
 
@@ -851,59 +835,32 @@ const DetalleEvento = () => {
                 <input
                   type="number"
                   step="0.5"
-                  min="0"
+                  min="0.5"
+                  max="24"
                   required
-                  placeholder="Ej. 2.0"
+                  placeholder="Ej. 2.5"
                   className="w-full px-4 py-3 bg-[#F8FAFC] border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600 transition"
                   value={formGestion.horas_estimadas}
                   onChange={(e) => setFormGestion({ ...formGestion, horas_estimadas: e.target.value })}
                 />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  El plazo se asignará automáticamente a la fecha límite del evento ({eventoActivo?.fecha ? formatearFechaDisplay(eventoActivo.fecha) : ''}).
+                </p>
               </div>
 
-              {/* Indicador de horas disponibles en tiempo real */}
-              {(() => {
-                const limite = parseFloat(eventoActivo?.limite_diario_horas);
-                if (isNaN(limite) || limite <= 0) return null;
-                const gestionesActuales = eventoActivo?.gestiones || eventoActivo?.gestiones_plan || [];
-                let horasExistentes = 0;
-                for (const g of gestionesActuales) {
-                  if (modalGestion.modo === 'editar' && g.id === modalGestion.gestionId) continue;
-                  const hrs = parseFloat(g.horas_estimadas);
-                  if (!isNaN(hrs) && hrs > 0) horasExistentes += hrs;
-                }
-                const nuevasHrs = parseFloat(formGestion.horas_estimadas);
-                const totalConNuevas = horasExistentes + (!isNaN(nuevasHrs) && nuevasHrs > 0 ? nuevasHrs : 0);
-                const superaLimite = totalConNuevas > limite;
-                return (
-                  <div className={`rounded-xl px-4 py-3 flex items-start gap-2 text-xs font-medium border ${
-                    superaLimite
-                      ? 'bg-red-50 border-red-200 text-red-700'
-                      : 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                  }`}>
-                    <AlertCircle className={`w-4 h-4 flex-shrink-0 mt-0.5 ${superaLimite ? 'text-red-500' : 'text-emerald-500'}`} />
-                    <span>
-                      {superaLimite
-                        ? `Las horas estimadas de las subtareas (${totalConNuevas}h) superan el límite del evento (${limite}h). Reduce las horas para continuar.`
-                        : `Horas usadas: ${totalConNuevas}h de ${limite}h disponibles.`
-                      }
-                    </span>
-                  </div>
-                );
-              })()}
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setModalGestion({ abierto: false, modo: 'crear', gestionId: null })}
-                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
+                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 bg-[#7E22CE] hover:bg-[#6B21A8] text-white font-bold rounded-xl text-xs transition shadow-sm cursor-pointer"
+                  className="px-5 py-2.5 bg-[#7E22CE] hover:bg-[#6B21A8] text-white font-bold text-xs rounded-xl shadow-sm transition cursor-pointer"
                 >
-                  Guardar Subtarea
+                  {modalGestion.modo === 'crear' ? 'Crear Subtarea' : 'Guardar Cambios'}
                 </button>
               </div>
             </form>

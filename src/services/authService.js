@@ -40,8 +40,9 @@ export const authService = {
     });
 
     if (data.access) {
-      localStorage.setItem('accessToken', data.access);
-      if (data.refresh) localStorage.setItem('refreshToken', data.refresh);
+      // Usamos 'token' y 'refresh_token' para sincronizar con AuthContext
+      localStorage.setItem('token', data.access);
+      if (data.refresh) localStorage.setItem('refresh_token', data.refresh);
 
       try {
         const userProfile = await authService.getProfile(data.access);
@@ -66,10 +67,10 @@ export const authService = {
     const payload = {
       username: userData.email,
       email: userData.email,
-      first_name: userData.first_name || '',
+      first_name: userData.nombre_completo || userData.first_name || '',
       last_name: userData.last_name || '',
       password: userData.password,
-      password_confirmation: userData.password,
+      password_confirmation: userData.password_confirmation || userData.password,
     };
 
     const registerResult = await safeFetch(`${API_URL}/register/`, {
@@ -78,16 +79,13 @@ export const authService = {
       body: JSON.stringify(payload),
     });
 
-    // Iniciar sesión tras registro exitoso para sincronizar el perfil con el nombre
     try {
       await authService.login(userData.email, userData.password);
     } catch {
-      // Si falla el auto-login por token, guardamos el perfil localmente con sus datos
       const localUser = {
         email: userData.email,
         username: userData.email,
-        first_name: userData.first_name || '',
-        last_name: userData.last_name || ''
+        nombre_completo: userData.nombre_completo || '',
       };
       localStorage.setItem('user', JSON.stringify(localUser));
     }
@@ -97,7 +95,7 @@ export const authService = {
 
   // 3. Obtener Perfil (GET /api/users/profile/)
   getProfile: async (token) => {
-    const authToken = token || localStorage.getItem('accessToken');
+    const authToken = token || localStorage.getItem('token');
     return await safeFetch(`${API_URL}/users/profile/`, {
       method: 'GET',
       headers: {
@@ -118,18 +116,21 @@ export const authService = {
 
   // 5. Cerrar Sesión
   logout: () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user');
+    // Limpiamos también por si acaso quedaron rastros viejos
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
   },
 
-  // 6. Consultas auxiliares
+  // 6. Consultas auxiliares unificadas
   getCurrentUser: () => {
     const userStr = localStorage.getItem('user');
     return userStr ? JSON.parse(userStr) : null;
   },
 
   getToken: () => {
-    return localStorage.getItem('accessToken');
+    return localStorage.getItem('token') || localStorage.getItem('accessToken');
   },
 };
