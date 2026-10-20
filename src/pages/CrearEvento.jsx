@@ -14,6 +14,10 @@ const CAMPO = 'w-full min-w-0 !text-base sm:!text-sm';
 // Áreas táctiles de 44px en móvil/tablet
 const TACTIL = 'min-h-[44px] md:min-h-0';
 
+// Safari/iOS: el input de fecha ignora el ancho del contenedor y se sale del diálogo mientras conserve su apariencia nativa.
+// appearance-none + min-w-0 lo obliga a respetar el ancho; min-h evita que colapse cuando está vacío.
+const FECHA_IOS = 'appearance-none block min-w-0 max-w-full min-h-[3.25rem] sm:min-h-0 [&::-webkit-date-and-time-value]:text-left';
+
 const nuevaGestion = () => ({ id: Date.now() + Math.random(), descripcion: '', plazo: '', horas_estimadas: '' });
 
 const CrearEvento = ({ onEventoCreado }) => {
@@ -321,7 +325,7 @@ const CrearEvento = ({ onEventoCreado }) => {
               <input
                 type="date"
                 min={hoyStr}
-                className={`${errores.fecha ? UI.inputError : UI.input} ${CAMPO} ${FOCO}`}
+                className={`${errores.fecha ? UI.inputError : UI.input} ${CAMPO} ${FECHA_IOS} ${FOCO}`}
                 value={formEvento.fecha}
                 {...propsCampo('fecha')}
                 onChange={(e) => {
@@ -478,7 +482,7 @@ const CrearEvento = ({ onEventoCreado }) => {
                     type="date"
                     min={hoyStr}
                     max={formEvento.fecha || undefined}
-                    className={`${UI.input} ${CAMPO} ${FOCO}`}
+                    className={`${UI.input} ${CAMPO} ${FECHA_IOS} ${FOCO}`}
                     value={gest.plazo}
                     onChange={(e) => handleGestionChange(gest.id, 'plazo', e.target.value)}
                   />

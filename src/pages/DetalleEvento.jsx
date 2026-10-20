@@ -69,6 +69,10 @@ const CLASE_MODAL = 'bg-white rounded-3xl p-5 sm:p-8 w-full max-w-lg shadow-2xl 
 const PIE_DIALOGO = 'flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 pt-5 border-t border-slate-100';
 const BTN_DIALOGO = `w-full sm:w-auto justify-center ${TACTIL}`;
 
+// Safari/iOS: el input de fecha ignora el ancho del contenedor y se sale del diálogo mientras conserve su apariencia nativa.
+// appearance-none + min-w-0 lo obliga a respetar el ancho; min-h evita que colapse cuando está vacío.
+const FECHA_IOS = 'appearance-none block min-w-0 max-w-full min-h-[3.25rem] sm:min-h-0 [&::-webkit-date-and-time-value]:text-left';
+
 const SELECTOR_FOCO =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -389,7 +393,7 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
                     setForm({ ...form, fecha: e.target.value });
                     setErrorFecha('');
                   }}
-                  className={`${errorFecha ? UI.inputError : UI.input} ${CAMPO} pl-11 ${FOCO}`}
+                  className={`${errorFecha ? UI.inputError : UI.input} ${CAMPO} ${FECHA_IOS} pl-11 ${FOCO}`}
                 />
               </div>
               <MensajeCampo id="posponer-fecha-error" texto={errorFecha} />
@@ -438,7 +442,7 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
 const DateField = ({ invalido = false, ...props }) => (
   <div className="relative">
     <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" aria-hidden="true" />
-    <input type="date" {...props} className={`${invalido ? UI.inputError : UI.input} ${CAMPO} pl-11 ${FOCO}`} />
+    <input type="date" {...props} className={`${invalido ? UI.inputError : UI.input} ${CAMPO} ${FECHA_IOS} pl-11 ${FOCO}`} />
   </div>
 );
 

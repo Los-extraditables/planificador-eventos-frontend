@@ -56,6 +56,10 @@ const CAMPO_MOVIL = '!text-base sm:!text-sm';
 // Estilo del diálogo definido aquí (no depende de UI.modal): padding y ancho adaptados a cada pantalla
 const CLASE_MODAL = 'bg-white rounded-3xl p-5 sm:p-8 w-full max-w-lg shadow-2xl border border-slate-100 text-left';
 
+// Safari/iOS: el input de fecha ignora el ancho del contenedor y se sale del diálogo mientras conserve su apariencia nativa.
+// appearance-none + min-w-0 lo obliga a respetar el ancho; min-h evita que colapse cuando está vacío.
+const FECHA_IOS = 'appearance-none block min-w-0 max-w-full min-h-[3.25rem] sm:min-h-0 [&::-webkit-date-and-time-value]:text-left';
+
 const SELECTOR_FOCO =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -311,7 +315,7 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
                       setForm({ ...form, fecha: e.target.value });
                       setErrorFecha('');
                     }}
-                    className={`${errorFecha ? UI.inputError : UI.input} pl-11 w-full min-w-0 ${CAMPO_MOVIL} ${FOCO}`}
+                    className={`${errorFecha ? UI.inputError : UI.input} pl-11 w-full min-w-0 ${CAMPO_MOVIL} ${FECHA_IOS} ${FOCO}`}
                   />
                 </div>
                 {errorFecha && (
