@@ -3,6 +3,14 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
+// Clases compartidas: el espaciado se cambia aquí y afecta a todos los campos por igual
+const ETIQUETA = 'block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider';
+const ICONO = 'absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-slate-400';
+const CAMPO =
+  'w-full pl-11 pr-4 py-3.5 bg-[#F8FAFC] border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#7E22CE] focus:border-transparent transition';
+const CAMPO_CON_OJO = CAMPO.replace('pr-4', 'pr-12');
+const BOTON_OJO = 'absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer';
+
 export const RegisterPage = () => {
   const [nombreCompleto, setNombreCompleto] = useState('');
   const [email, setEmail] = useState('');
@@ -41,7 +49,7 @@ export const RegisterPage = () => {
         password,
         password_confirmation: confirmPassword
       });
-      
+
       setMensajeExito('¡Cuenta creada exitosamente! Redirigiendo...');
       setTimeout(() => {
         navigate('/hoy');
@@ -55,8 +63,8 @@ export const RegisterPage = () => {
 
   return (
     <div className="text-left w-full max-w-md mx-auto font-sans">
-      <div className="mb-6">
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mb-1">
+      <div className="mb-8">
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mb-2">
           Crear cuenta
         </h1>
         <p className="text-xs sm:text-sm text-slate-500">
@@ -65,34 +73,34 @@ export const RegisterPage = () => {
       </div>
 
       {error && (
-        <div className="bg-red-50 text-red-700 text-xs font-semibold p-4 rounded-2xl mb-4 border border-red-200 flex items-center gap-2.5 shadow-sm">
+        <div className="bg-red-50 text-red-700 text-xs font-semibold p-4 rounded-2xl mb-6 border border-red-200 flex items-center gap-2.5 shadow-sm">
           <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
       {mensajeExito && (
-        <div className="bg-emerald-50 text-emerald-700 text-xs font-semibold p-4 rounded-2xl mb-4 border border-emerald-200 flex items-center gap-2.5 shadow-sm">
+        <div className="bg-emerald-50 text-emerald-700 text-xs font-semibold p-4 rounded-2xl mb-6 border border-emerald-200 flex items-center gap-2.5 shadow-sm">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
           <span>{mensajeExito}</span>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-5">
         {/* NOMBRE COMPLETO */}
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+          <label className={ETIQUETA}>
             Nombre completo <span className="text-red-500">*</span>
           </label>
           <div className="relative">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+            <span className={ICONO}>
               <User className="w-4 h-4" />
             </span>
             <input
               type="text"
               required
               placeholder="Ej. Juan Rojas"
-              className="w-full pl-10 pr-4 py-3 bg-[#F8FAFC] border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#7E22CE] focus:border-transparent transition"
+              className={CAMPO}
               value={nombreCompleto}
               onChange={(e) => setNombreCompleto(e.target.value)}
             />
@@ -101,18 +109,18 @@ export const RegisterPage = () => {
 
         {/* CORREO ELECTRÓNICO */}
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+          <label className={ETIQUETA}>
             Correo electrónico <span className="text-red-500">*</span>
           </label>
           <div className="relative">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+            <span className={ICONO}>
               <Mail className="w-4 h-4" />
             </span>
             <input
               type="email"
               required
               placeholder="tu@correo.com"
-              className="w-full pl-10 pr-4 py-3 bg-[#F8FAFC] border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#7E22CE] focus:border-transparent transition"
+              className={CAMPO}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -121,25 +129,26 @@ export const RegisterPage = () => {
 
         {/* CONTRASEÑA */}
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+          <label className={ETIQUETA}>
             Contraseña <span className="text-red-500">*</span>
           </label>
           <div className="relative">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+            <span className={ICONO}>
               <Lock className="w-4 h-4" />
             </span>
             <input
               type={showPassword ? 'text' : 'password'}
               required
               placeholder="Mínimo 6 caracteres"
-              className="w-full pl-10 pr-10 py-3 bg-[#F8FAFC] border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#7E22CE] focus:border-transparent transition"
+              className={CAMPO_CON_OJO}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+              className={BOTON_OJO}
+              aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
             >
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
@@ -148,25 +157,26 @@ export const RegisterPage = () => {
 
         {/* CONFIRMAR CONTRASEÑA */}
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+          <label className={ETIQUETA}>
             Confirmar contraseña <span className="text-red-500">*</span>
           </label>
           <div className="relative">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+            <span className={ICONO}>
               <Lock className="w-4 h-4" />
             </span>
             <input
               type={showConfirmPassword ? 'text' : 'password'}
               required
               placeholder="Repite tu contraseña"
-              className="w-full pl-10 pr-10 py-3 bg-[#F8FAFC] border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#7E22CE] focus:border-transparent transition"
+              className={CAMPO_CON_OJO}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
             />
             <button
               type="button"
               onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+              className={BOTON_OJO}
+              aria-label={showConfirmPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
             >
               {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
@@ -177,13 +187,13 @@ export const RegisterPage = () => {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-[#7E22CE] hover:bg-[#6B21A8] text-white font-bold py-3.5 rounded-xl text-xs sm:text-sm transition-all shadow-sm cursor-pointer disabled:opacity-50 mt-2"
+          className="w-full bg-[#7E22CE] hover:bg-[#6B21A8] text-white font-bold py-3.5 rounded-xl text-xs sm:text-sm transition-all shadow-sm cursor-pointer disabled:opacity-50 mt-3"
         >
           {loading ? 'Creando cuenta...' : 'Crear Cuenta'}
         </button>
       </form>
 
-      <p className="text-xs text-center text-slate-500 mt-6 font-medium">
+      <p className="text-xs text-center text-slate-500 mt-8 font-medium">
         ¿Ya tienes cuenta?{' '}
         <Link to="/login" className="text-[#7E22CE] font-bold hover:underline">
           Inicia sesión
