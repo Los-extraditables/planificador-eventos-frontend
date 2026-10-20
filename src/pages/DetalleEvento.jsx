@@ -52,6 +52,14 @@ const request = async (ruta, { method = 'GET', body } = {}) => {
 /* ============================ Utilidades ============================ */
 const NOTA_POR_DEFECTO = 'Pospuesto sin nota';
 
+// Anillo de foco visible y consistente para los controles definidos en este archivo
+const FOCO = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-700 focus-visible:ring-offset-2';
+
+const SELECTOR_FOCO =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+const SIN_ERROR = { campo: '', texto: '' };
+
 const fechaOffsetStr = (dias = 0) => {
   const d = new Date();
   d.setDate(d.getDate() + dias);
@@ -92,11 +100,113 @@ const armarCambio = (accion, { fecha, nota } = {}) => {
   };
 };
 
+// Atributos de accesibilidad de un campo con posible error dentro de un formulario
+const attrsCampo = (err, campo, id, extraDescribedBy) => {
+  const conError = err.campo === campo;
+  const ids = [extraDescribedBy, conError ? `${id}-error` : null].filter(Boolean).join(' ');
+  return {
+    id,
+    'aria-invalid': conError ? 'true' : undefined,
+    'aria-describedby': ids || undefined
+  };
+};
+
+const MensajeCampo = ({ id, texto }) =>
+  texto ? (
+    <p id={id} role="alert" className={UI.error}>
+      {texto}
+    </p>
+  ) : null;
+
+const Asterisco = () => (
+  <>
+    <span className="text-red-700" aria-hidden="true">*</span>
+    <span className="sr-only"> (obligatorio)</span>
+  </>
+);
+
+/* ===================== Diálogo accesible (foco, Esc, Tab) ===================== */
+// Al abrir: foco en [data-autofocus] (o el primer control). Al cerrar: devuelve el foco a quien lo abrió.
+// Si ese elemento ya no existe (p. ej. se eliminó la subtarea), el foco pasa al encabezado #foco-fallback.
+const useDialogo = (onCerrar, bloqueado) => {
+  const ref = useRef(null);
+  const cerrarRef = useRef(onCerrar);
+  const bloqueadoRef = useRef(bloqueado);
+  cerrarRef.current = onCerrar;
+  bloqueadoRef.current = bloqueado;
+
+  useEffect(() => {
+    const previo = document.activeElement;
+    const cont = ref.current;
+    const inicial = cont?.querySelector('[data-autofocus]') || cont?.querySelector(SELECTOR_FOCO);
+    inicial?.focus();
+    return () => {
+      if (previo && previo.isConnected && typeof previo.focus === 'function') previo.focus();
+      else document.getElementById('foco-fallback')?.focus();
+    };
+  }, []);
+
+  const onKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      if (!bloqueadoRef.current) cerrarRef.current();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const enfocables = ref.current?.querySelectorAll(SELECTOR_FOCO);
+    if (!enfocables || enfocables.length === 0) return;
+    const primero = enfocables[0];
+    const ultimo = enfocables[enfocables.length - 1];
+    if (e.shiftKey && document.activeElement === primero) {
+      e.preventDefault();
+      ultimo.focus();
+    } else if (!e.shiftKey && document.activeElement === ultimo) {
+      e.preventDefault();
+      primero.focus();
+    }
+  };
+
+  return { ref, onKeyDown };
+};
+
+const Modal = ({ onCerrar, bloqueado = false, labelledBy, describedBy, role = 'dialog', z = 'z-50', className, children }) => {
+  const { ref, onKeyDown } = useDialogo(onCerrar, bloqueado);
+  return (
+    <div
+      className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 ${z}`}
+      onMouseDown={(e) => e.target === e.currentTarget && !bloqueado && onCerrar()}
+    >
+      <div
+        ref={ref}
+        role={role}
+        aria-modal="true"
+        aria-labelledby={labelledBy}
+        aria-describedby={describedBy}
+        onKeyDown={onKeyDown}
+        className={className}
+      >
+        {children}
+      </div>
+    </div>
+  );
+};
+
+const BotonCerrar = ({ onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`p-1 rounded text-slate-600 hover:text-slate-800 transition cursor-pointer ${FOCO}`}
+    aria-label="Cerrar diálogo"
+  >
+    <X className="w-5 h-5" aria-hidden="true" />
+  </button>
+);
+
 /* ===================== Etiqueta de pospuestas (igual que en Hoy y Progreso) ===================== */
 const EtiquetaPospuestas = ({ cantidad, texto }) => {
   if (!cantidad && !texto) return null;
   return (
-    <span className="inline-flex items-center bg-amber-100 text-amber-800 border border-amber-200 text-[10px] leading-4 font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
+    <span className="inline-flex items-center bg-amber-100 text-amber-800 border border-amber-200 text-xs leading-4 font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
       {texto || `${cantidad} ${cantidad === 1 ? 'pospuesta' : 'pospuestas'}`}
     </span>
   );
@@ -141,6 +251,7 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
   const [form, setForm] = useState({ fecha: '', nota: '' });
   const [errorFecha, setErrorFecha] = useState('');
   const [guardando, setGuardando] = useState(false);
+  const inputFechaRef = useRef(null);
 
   const completada = Boolean(gestion.completada);
   const minFecha = fechaOffsetStr(1);
@@ -152,13 +263,6 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
     setErrorFecha('');
   };
 
-  useEffect(() => {
-    if (!abierto) return undefined;
-    const onKey = (e) => e.key === 'Escape' && cerrar();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [abierto]);
-
   const ejecutar = async (accion, datos) => {
     setGuardando(true);
     try {
@@ -168,14 +272,23 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
     }
   };
 
+  const fallar = (texto) => {
+    setErrorFecha(texto);
+    inputFechaRef.current?.focus(); // el foco va al campo inválido
+  };
+
   const confirmarPosponer = async (e) => {
     e.preventDefault();
-    if (!form.fecha) return setErrorFecha('Selecciona la nueva fecha.');
-    if (form.fecha < minFecha) return setErrorFecha('La nueva fecha debe ser posterior a hoy.');
-    if (maxFecha && form.fecha > maxFecha) return setErrorFecha('La fecha no puede superar la fecha límite del evento.');
+    if (!form.fecha) return fallar('Selecciona la nueva fecha.');
+    if (form.fecha < minFecha) return fallar('La nueva fecha debe ser posterior a hoy.');
+    if (maxFecha && form.fecha > maxFecha) return fallar('La fecha no puede superar la fecha límite del evento.');
     cerrar();
     await ejecutar('pospuesto', { fecha: form.fecha, nota: form.nota });
   };
+
+  const describedFecha = [errorFecha ? 'posponer-fecha-error' : null, maxFecha && !errorFecha ? 'posponer-fecha-ayuda' : null]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <>
@@ -184,11 +297,10 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
           type="button"
           onClick={() => ejecutar(completada ? 'pendiente' : 'hecho')}
           disabled={guardando}
-          aria-pressed={completada}
-          title={completada ? 'Marcar como pendiente' : 'Marcar como hecha'}
-          className={`${UI.btnHecha} ${completada ? UI.btnHechaListo : UI.btnHechaPendiente}`}
+          aria-label={completada ? `Completada. Marcar como pendiente: ${gestion.descripcion}` : `Marcar como hecha: ${gestion.descripcion}`}
+          className={`${UI.btnHecha} ${completada ? UI.btnHechaListo : UI.btnHechaPendiente} ${FOCO}`}
         >
-          <Check className="w-3.5 h-3.5" />
+          <Check className="w-3.5 h-3.5" aria-hidden="true" />
           <span>{completada ? 'Completada' : 'Hecha'}</span>
         </button>
 
@@ -201,8 +313,9 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
               setAbierto(true);
             }}
             disabled={guardando}
-            title="Posponer subtarea"
-            className={UI.btnPosponer}
+            aria-label={`Posponer: ${gestion.descripcion}`}
+            aria-haspopup="dialog"
+            className={`${UI.btnPosponer} ${FOCO}`}
           >
             Posponer
           </button>
@@ -210,157 +323,127 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
       </div>
 
       {abierto && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onMouseDown={(e) => e.target === e.currentTarget && cerrar()}>
-          <div role="dialog" aria-modal="true" aria-labelledby="titulo-posponer" className={UI.modal}>
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-4 min-w-0">
-                <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
-                  <CalendarClock className="w-6 h-6" />
-                </div>
-                <div className="min-w-0">
-                  <h3 id="titulo-posponer" className={UI.modalTitulo}>Posponer subtarea</h3>
-                  <p className={`${UI.modalSubtitulo} truncate`}>{gestion.descripcion}</p>
-                </div>
+        <Modal onCerrar={cerrar} labelledBy="titulo-posponer" describedBy="descripcion-posponer" className={UI.modal}>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-4 min-w-0">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center flex-shrink-0">
+                <CalendarClock className="w-6 h-6" aria-hidden="true" />
               </div>
-              <button type="button" onClick={cerrar} className="p-1 text-slate-400 hover:text-slate-600 transition cursor-pointer" aria-label="Cerrar">
-                <X className="w-5 h-5" />
-              </button>
+              <div className="min-w-0">
+                <h2 id="titulo-posponer" className={UI.modalTitulo}>Posponer subtarea</h2>
+                <p id="descripcion-posponer" className={`${UI.modalSubtitulo} truncate`}>{gestion.descripcion}</p>
+              </div>
+            </div>
+            <BotonCerrar onClick={cerrar} />
+          </div>
+
+          <form onSubmit={confirmarPosponer} noValidate className="mt-6 space-y-5">
+            <div>
+              <label htmlFor="posponer-fecha" className={UI.label}>
+                Nueva fecha <Asterisco />
+              </label>
+              <div className="relative">
+                <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" aria-hidden="true" />
+                <input
+                  ref={inputFechaRef}
+                  id="posponer-fecha"
+                  data-autofocus
+                  type="date"
+                  min={minFecha}
+                  max={maxFecha}
+                  aria-required="true"
+                  aria-invalid={errorFecha ? 'true' : 'false'}
+                  aria-describedby={describedFecha || undefined}
+                  value={form.fecha}
+                  onChange={(e) => {
+                    setForm({ ...form, fecha: e.target.value });
+                    setErrorFecha('');
+                  }}
+                  className={`${errorFecha ? UI.inputError : UI.input} pl-11 ${FOCO}`}
+                />
+              </div>
+              <MensajeCampo id="posponer-fecha-error" texto={errorFecha} />
+              {maxFecha && !errorFecha && (
+                <p id="posponer-fecha-ayuda" className="text-xs text-slate-600 mt-1.5">Puedes elegir hasta la fecha límite del evento.</p>
+              )}
             </div>
 
-            <form onSubmit={confirmarPosponer} className="mt-6 space-y-5">
-              <div>
-                <label htmlFor="posponer-fecha" className={UI.label}>
-                  Nueva fecha <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                  <input
-                    id="posponer-fecha"
-                    type="date"
-                    min={minFecha}
-                    max={maxFecha}
-                    autoFocus
-                    value={form.fecha}
-                    onChange={(e) => {
-                      setForm({ ...form, fecha: e.target.value });
-                      setErrorFecha('');
-                    }}
-                    className={`${errorFecha ? UI.inputError : UI.input} pl-11`}
-                  />
-                </div>
-                {errorFecha && <p className={UI.error}>{errorFecha}</p>}
-                {maxFecha && !errorFecha && <p className="text-[11px] text-slate-400 mt-1.5">Puedes elegir hasta la fecha límite del evento.</p>}
-              </div>
+            <div>
+              <label htmlFor="posponer-nota" className={UI.label}>
+                Nota <span className="text-slate-600 font-normal">(opcional)</span>
+              </label>
+              <textarea
+                id="posponer-nota"
+                rows={3}
+                maxLength={300}
+                placeholder="Ej. Esperando respuesta del proveedor"
+                value={form.nota}
+                onChange={(e) => setForm({ ...form, nota: e.target.value })}
+                aria-describedby="posponer-nota-contador"
+                className={`${UI.input} resize-none ${FOCO}`}
+              />
+              <p id="posponer-nota-contador" className="text-xs text-slate-600 mt-1 text-right">
+                {form.nota.length}/300<span className="sr-only"> caracteres</span>
+              </p>
+            </div>
 
-              <div>
-                <label htmlFor="posponer-nota" className={UI.label}>
-                  Nota <span className="text-slate-400 font-normal">(opcional)</span>
-                </label>
-                <textarea
-                  id="posponer-nota"
-                  rows={3}
-                  maxLength={300}
-                  placeholder="Ej. Esperando respuesta del proveedor"
-                  value={form.nota}
-                  onChange={(e) => setForm({ ...form, nota: e.target.value })}
-                  className={`${UI.input} resize-none`}
-                />
-                <p className="text-[11px] text-slate-400 mt-1 text-right">{form.nota.length}/300</p>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-5 border-t border-slate-100">
-                <button type="button" onClick={cerrar} className={UI.btnSecundario}>
-                  Cancelar
-                </button>
-                <button type="submit" className={UI.btnPrimario}>
-                  Posponer
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div className="flex justify-end gap-3 pt-5 border-t border-slate-100">
+              <button type="button" onClick={cerrar} className={`${UI.btnSecundario} ${FOCO}`}>
+                Cancelar
+              </button>
+              <button type="submit" className={`${UI.btnPrimario} ${FOCO}`}>
+                Posponer
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
     </>
   );
 };
 
 /* ============================ Campo de fecha ============================ */
-const DateField = ({ value, onChange, min, max, placeholder, required }) => {
-  const [enfocado, setEnfocado] = useState(false);
-  const ref = useRef(null);
-
-  return (
-    <div className="relative">
-      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-      <input
-        ref={ref}
-        type={enfocado || value ? 'date' : 'text'}
-        placeholder={placeholder}
-        min={min}
-        max={max}
-        required={required}
-        value={value}
-        onChange={onChange}
-        onFocus={() => {
-          setEnfocado(true);
-          setTimeout(() => {
-            try {
-              ref.current?.showPicker?.();
-            } catch {
-              /* noop */
-            }
-          }, 0);
-        }}
-        onBlur={() => setEnfocado(false)}
-        className={`${UI.input} pl-11 [&::-webkit-calendar-picker-indicator]:hidden`}
-      />
-    </div>
-  );
-};
+// Siempre type="date" (antes cambiaba de tipo al enfocar y abría el selector solo, lo que desorienta
+// a quien navega con teclado o lector de pantalla).
+const DateField = ({ invalido = false, ...props }) => (
+  <div className="relative">
+    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" aria-hidden="true" />
+    <input type="date" {...props} className={`${invalido ? UI.inputError : UI.input} pl-11 ${FOCO}`} />
+  </div>
+);
 
 /* ===================== Modal de confirmación de eliminación (igual que en Progreso) ===================== */
-const ModalConfirmarEliminar = ({ titulo, descripcion, eliminando, onConfirmar, onCancelar }) => {
-  useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && !eliminando && onCancelar();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [eliminando, onCancelar]);
-
-  return (
-    <div
-      className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[70] p-4"
-      onMouseDown={(e) => e.target === e.currentTarget && !eliminando && onCancelar()}
-    >
-      <div
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="titulo-eliminar"
-        aria-describedby="desc-eliminar"
-        className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl border border-slate-100 text-left"
-      >
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center flex-shrink-0">
-            <AlertTriangle className="w-6 h-6" />
-          </div>
-          <div className="min-w-0">
-            <h3 id="titulo-eliminar" className={UI.modalTitulo}>{titulo}</h3>
-            <p id="desc-eliminar" className={`${UI.modalSubtitulo} leading-relaxed`}>{descripcion}</p>
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-3 pt-6 mt-6 border-t border-slate-100">
-          <button type="button" onClick={onCancelar} disabled={eliminando} autoFocus className={UI.btnSecundario}>
-            Cancelar
-          </button>
-          <button type="button" onClick={onConfirmar} disabled={eliminando} className={UI.btnPeligro}>
-            <Trash2 className="w-4 h-4" />
-            {eliminando ? 'Eliminando...' : 'Eliminar'}
-          </button>
-        </div>
+const ModalConfirmarEliminar = ({ titulo, descripcion, eliminando, onConfirmar, onCancelar }) => (
+  <Modal
+    role="alertdialog"
+    z="z-[70]"
+    bloqueado={eliminando}
+    onCerrar={onCancelar}
+    labelledBy="titulo-eliminar"
+    describedBy="desc-eliminar"
+    className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl border border-slate-100 text-left"
+  >
+    <div className="flex items-start gap-4">
+      <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-700 flex items-center justify-center flex-shrink-0">
+        <AlertTriangle className="w-6 h-6" aria-hidden="true" />
+      </div>
+      <div className="min-w-0">
+        <h2 id="titulo-eliminar" className={UI.modalTitulo}>{titulo}</h2>
+        <p id="desc-eliminar" className={`${UI.modalSubtitulo} leading-relaxed`}>{descripcion}</p>
       </div>
     </div>
-  );
-};
+
+    <div className="flex justify-end gap-3 pt-6 mt-6 border-t border-slate-100">
+      <button type="button" onClick={onCancelar} disabled={eliminando} data-autofocus className={`${UI.btnSecundario} ${FOCO}`}>
+        Cancelar
+      </button>
+      <button type="button" onClick={onConfirmar} disabled={eliminando} className={`${UI.btnPeligro} ${FOCO}`}>
+        <Trash2 className="w-4 h-4" aria-hidden="true" />
+        {eliminando ? 'Eliminando...' : 'Eliminar'}
+      </button>
+    </div>
+  </Modal>
+);
 
 /* ================================ Página ================================ */
 const GESTION_VACIA = { descripcion: '', plazo: '', horas_estimadas: '' };
@@ -380,8 +463,10 @@ const DetalleEvento = () => {
 
   const [modalGestion, setModalGestion] = useState(MODAL_GESTION_CERRADO);
   const [formGestion, setFormGestion] = useState(GESTION_VACIA);
+  const [errGestion, setErrGestion] = useState(SIN_ERROR);
   const [modalEvento, setModalEvento] = useState(false);
   const [formEvento, setFormEvento] = useState({ nombre: '', tipo: '', fecha: '', limite_diario_horas: '' });
+  const [errEvento, setErrEvento] = useState(SIN_ERROR);
 
   const enVuelo = useRef(0);
   const timerMensaje = useRef(null);
@@ -402,9 +487,21 @@ const DetalleEvento = () => {
     navigate('/login');
   };
 
-  const manejarError = (err) => {
+  // Si hay un diálogo abierto, el error se muestra dentro de él (el aviso de página quedaría detrás del fondo)
+  const manejarError = (err, setErr) => {
     if (err.sesionExpirada) return handleSesionExpirada();
-    mostrarMensaje('error', err.message);
+    if (setErr) setErr({ campo: 'general', texto: err.message });
+    else mostrarMensaje('error', err.message);
+  };
+
+  const fallarEvento = (campo, texto) => {
+    setErrEvento({ campo, texto });
+    document.getElementById(`evento-${campo}`)?.focus();
+  };
+
+  const fallarGestion = (campo, texto) => {
+    setErrGestion({ campo, texto });
+    if (campo !== 'general') document.getElementById(`gestion-${campo}`)?.focus();
   };
 
   const cargar = async (silencioso = false) => {
@@ -484,7 +581,9 @@ const DetalleEvento = () => {
 
       enVuelo.current -= 1;
       if (enVuelo.current === 0) cargar(true);
-      if (accion === 'pospuesto') mostrarMensaje('exito', `Subtarea pospuesta al ${formatearFechaDisplay(datos.fecha)}.`);
+      if (accion === 'hecho') mostrarMensaje('exito', `"${gestion.descripcion}" marcada como hecha.`);
+      else if (accion === 'pendiente') mostrarMensaje('exito', `"${gestion.descripcion}" volvió a pendiente.`);
+      else mostrarMensaje('exito', `Subtarea pospuesta al ${formatearFechaDisplay(datos.fecha)}.`);
       return { ok: true };
     } catch (err) {
       enVuelo.current -= 1;
@@ -504,6 +603,7 @@ const DetalleEvento = () => {
       fecha: limpiarFecha(eventoActivo.fecha),
       limite_diario_horas: eventoActivo.limite_diario_horas || ''
     });
+    setErrEvento(SIN_ERROR);
     setModalEvento(true);
   };
 
@@ -511,16 +611,22 @@ const DetalleEvento = () => {
     e.preventDefault();
     const nuevoLimite = parseFloat(formEvento.limite_diario_horas);
     const horasUsadas = sumarHoras(gestionesDe(eventoActivo));
+    const fechaNueva = limpiarFecha(formEvento.fecha);
 
-    if (isNaN(nuevoLimite) || nuevoLimite <= 0) return mostrarMensaje('error', 'Ingresa un límite de horas mayor a 0.');
+    // Validación en el orden visual de los campos
+    if (!formEvento.nombre.trim()) return fallarEvento('nombre', 'Escribe el nombre del evento.');
+    if (!fechaNueva) return fallarEvento('fecha', 'Selecciona la fecha límite del evento.');
+    if (fechaNueva < hoyStr) return fallarEvento('fecha', 'La fecha no puede ser anterior a hoy. Elige hoy o una fecha futura.');
+    if (isNaN(nuevoLimite) || nuevoLimite < 1 || nuevoLimite > 24) {
+      return fallarEvento('limite', 'Ingresa un límite de horas entre 1 y 24.');
+    }
     if (nuevoLimite < horasUsadas) {
-      return mostrarMensaje(
-        'error',
+      return fallarEvento(
+        'limite',
         `No puedes bajar el límite a ${nuevoLimite} h porque tus subtareas ya suman ${horasUsadas} h. Reduce las horas de las subtareas o elimina alguna, o deja el límite en ${horasUsadas} h o más.`
       );
     }
 
-    const fechaNueva = limpiarFecha(formEvento.fecha);
     const cambioFecha = fechaNueva !== limpiarFecha(eventoActivo?.fecha);
 
     try {
@@ -570,13 +676,14 @@ const DetalleEvento = () => {
       setModalEvento(false);
       await cargar(true);
     } catch (err) {
-      manejarError(err);
+      manejarError(err, setErrEvento);
     }
   };
 
   // --- Crear / editar subtarea ---
   const handleAbrirCrear = () => {
     setFormGestion(GESTION_VACIA);
+    setErrGestion(SIN_ERROR);
     setModalGestion({ abierto: true, modo: 'crear', gestionId: null });
   };
 
@@ -586,6 +693,7 @@ const DetalleEvento = () => {
       plazo: limpiarFecha(gestion.plazo),
       horas_estimadas: gestion.horas_estimadas ? String(gestion.horas_estimadas) : ''
     });
+    setErrGestion(SIN_ERROR);
     setModalGestion({ abierto: true, modo: 'editar', gestionId: gestion.id });
   };
 
@@ -595,21 +703,24 @@ const DetalleEvento = () => {
     const plazoFinal = formGestion.plazo || fechaEvento;
     const nuevasHoras = parseFloat(formGestion.horas_estimadas);
 
-    if (!plazoFinal) return mostrarMensaje('error', 'El evento activo no tiene una fecha definida.');
-    if (formGestion.plazo && formGestion.plazo < hoyStr) return mostrarMensaje('error', 'El plazo no puede ser anterior a hoy.');
+    // Validación en el orden visual de los campos
+    if (!formGestion.descripcion.trim()) return fallarGestion('descripcion', 'Escribe el nombre de la subtarea.');
+    if (!plazoFinal) return fallarGestion('general', 'El evento activo no tiene una fecha definida.');
+    if (formGestion.plazo && formGestion.plazo < hoyStr) return fallarGestion('plazo', 'El plazo no puede ser anterior a hoy.');
     if (formGestion.plazo && fechaEvento && formGestion.plazo > fechaEvento) {
-      return mostrarMensaje('error', `El plazo no puede ser posterior a la fecha límite del evento (${formatearFechaDisplay(fechaEvento)}).`);
+      return fallarGestion('plazo', `El plazo no puede ser posterior a la fecha límite del evento (${formatearFechaDisplay(fechaEvento)}).`);
     }
-    if (!formGestion.descripcion.trim()) return mostrarMensaje('error', 'La descripción de la subtarea es obligatoria.');
-    if (isNaN(nuevasHoras) || nuevasHoras <= 0) return mostrarMensaje('error', 'Las horas estimadas deben ser un número mayor que cero.');
+    if (isNaN(nuevasHoras) || nuevasHoras <= 0 || nuevasHoras > 24) {
+      return fallarGestion('horas', 'Las horas estimadas deben ser un número mayor que 0 y de máximo 24.');
+    }
 
     const limiteEvento = parseFloat(eventoActivo?.limite_diario_horas);
     if (!isNaN(limiteEvento) && limiteEvento > 0) {
       const horasExistentes = sumarHoras(gestionesDe(eventoActivo), modalGestion.modo === 'editar' ? modalGestion.gestionId : null);
       const total = horasExistentes + nuevasHoras;
       if (total > limiteEvento) {
-        return mostrarMensaje(
-          'error',
+        return fallarGestion(
+          'horas',
           `No se puede guardar: las subtareas sumarían ${total} h y el límite del evento es ${limiteEvento} h. Te quedan ${Math.max(limiteEvento - horasExistentes, 0)} h disponibles. Reduce las horas de esta subtarea o aumenta el límite del evento.`
         );
       }
@@ -638,7 +749,7 @@ const DetalleEvento = () => {
       setModalGestion(MODAL_GESTION_CERRADO);
       await cargar(true);
     } catch (err) {
-      manejarError(err);
+      manejarError(err, setErrGestion);
     }
   };
 
@@ -662,11 +773,13 @@ const DetalleEvento = () => {
   if (cargando && !cargado) {
     return (
       <div className={UI.pagina}>
-        <PantallaCarga
-          icono={CalendarClock}
-          titulo="Cargando detalles de eventos"
-          texto="Organizamos la información. Tomará solo un momento."
-        />
+        <div role="status" aria-live="polite">
+          <PantallaCarga
+            icono={CalendarClock}
+            titulo="Cargando detalles de eventos"
+            texto="Organizamos la información. Tomará solo un momento."
+          />
+        </div>
       </div>
     );
   }
@@ -674,14 +787,14 @@ const DetalleEvento = () => {
   if (!cargado || eventos.length === 0) {
     return (
       <div className={UI.pagina}>
-        <button onClick={() => navigate('/hoy')} className={`inline-flex items-center gap-1.5 w-fit ${UI.btnEnlace}`}>
-          <ArrowLeft className="w-4 h-4" /> Volver a Hoy
+        <button type="button" onClick={() => navigate('/hoy')} className={`inline-flex items-center gap-1.5 w-fit ${UI.btnEnlace} ${FOCO}`}>
+          <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Volver a Hoy
         </button>
-        <div className="p-5 bg-red-50 text-red-700 border border-red-200 rounded-2xl text-sm flex items-center gap-3">
-          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+        <div role="alert" className="p-5 bg-red-50 text-red-700 border border-red-200 rounded-2xl text-sm flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
           <span>{error || 'No hay eventos disponibles para mostrar. Crea un evento nuevo.'}</span>
         </div>
-        <button onClick={() => cargar()} className={UI.btnPrimario}>
+        <button type="button" onClick={() => cargar()} className={`${UI.btnPrimario} ${FOCO}`}>
           Reintentar cargar
         </button>
       </div>
@@ -690,6 +803,9 @@ const DetalleEvento = () => {
 
   const gestionesEv = gestionesDe(eventoActivo);
   const progreso = calcularProgreso(gestionesEv);
+
+  // La URL pedía un evento que no existe: se avisa en vez de mostrar la lista general sin explicación
+  const idNoEncontrado = Boolean(urlId) && eventoSeleccionadoId === urlId && !eventoActivo;
 
   const limiteActual = parseFloat(eventoActivo?.limite_diario_horas) || 0;
   const horasOtras = sumarHoras(gestionesEv, modalGestion.modo === 'editar' ? modalGestion.gestionId : null);
@@ -702,23 +818,42 @@ const DetalleEvento = () => {
 
   return (
     <div className={UI.pagina}>
-      {mensaje.texto && <Aviso tipo={mensaje.tipo} texto={mensaje.texto} />}
+      {/* Aviso visible (oculto al lector de pantalla para no duplicar) */}
+      {mensaje.texto && (
+        <div aria-hidden="true">
+          <Aviso tipo={mensaje.tipo} texto={mensaje.texto} />
+        </div>
+      )}
+      {/* Regiones en vivo siempre presentes */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {mensaje.tipo !== 'error' ? mensaje.texto : ''}
+      </div>
+      <div role="alert" className="sr-only">
+        {mensaje.tipo === 'error' ? mensaje.texto : ''}
+      </div>
 
-      <button onClick={() => navigate('/hoy')} className={`inline-flex items-center gap-1.5 w-fit -mb-2 ${UI.btnEnlace}`}>
-        <ArrowLeft className="w-4 h-4" /> Volver a Hoy
+      <button type="button" onClick={() => navigate('/hoy')} className={`inline-flex items-center gap-1.5 w-fit -mb-2 ${UI.btnEnlace} ${FOCO}`}>
+        <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Volver a Hoy
       </button>
+
+      {idNoEncontrado && (
+        <div role="alert" className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-2xl text-sm flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
+          <span>No encontramos el evento solicitado. Puede que haya sido eliminado. Elige otro evento de la lista.</span>
+        </div>
+      )}
 
       <EncabezadoPagina
         titulo={seleccion === 'todos' ? 'Lista general de eventos' : eventoActivo.nombre}
         subtitulo={seleccion === 'todos' ? 'Selecciona cualquier evento para ver sus subtareas y detalles completos.' : undefined}
       >
         <div className={UI.filtro}>
-          <SlidersHorizontal className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          <SlidersHorizontal className="w-4 h-4 text-slate-500 flex-shrink-0" aria-hidden="true" />
           <select
             value={seleccion}
             onChange={(e) => setEventoSeleccionadoId(e.target.value)}
             aria-label="Seleccionar evento"
-            className={UI.filtroSelect}
+            className={`${UI.filtroSelect} ${FOCO}`}
           >
             <option value="todos">Todos los eventos</option>
             {eventos.map((e) => (
@@ -728,53 +863,69 @@ const DetalleEvento = () => {
         </div>
 
         {eventoActivo && (
-          <button onClick={handleAbrirEditarEvento} className={UI.btnSecundarioSm}>
-            <Edit3 className="w-4 h-4 text-purple-600" /> Editar evento
+          <button type="button" onClick={handleAbrirEditarEvento} className={`${UI.btnSecundarioSm} ${FOCO}`}>
+            <Edit3 className="w-4 h-4 text-purple-700" aria-hidden="true" /> Editar evento
           </button>
         )}
       </EncabezadoPagina>
 
       {seleccion === 'todos' ? (
-        <div className="grid grid-cols-1 gap-4">
-          {eventos.map((ev) => {
-            const p = calcularProgreso(gestionesDe(ev));
-            return (
-              <div
-                key={ev.id}
-                onClick={() => setEventoSeleccionadoId(String(ev.id))}
-                className={`${UI.tarjeta} hover:shadow-md transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 group`}
-              >
-                <div className="space-y-1.5 min-w-0">
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    <h3 className="text-base font-extrabold text-slate-900 group-hover:text-[#7E22CE] transition">{ev.nombre}</h3>
-                    <EtiquetaPospuestas cantidad={p.pospuestas} />
+        <>
+          <h2 id="foco-fallback" tabIndex={-1} className="sr-only focus:outline-none">Eventos</h2>
+          <ul className="grid grid-cols-1 gap-4">
+            {eventos.map((ev) => {
+              const p = calcularProgreso(gestionesDe(ev));
+              return (
+                // El clic en la tarjeta es solo una comodidad para el mouse; el control accesible es el botón "Ver detalle"
+                <li
+                  key={ev.id}
+                  onClick={() => setEventoSeleccionadoId(String(ev.id))}
+                  className={`${UI.tarjeta} hover:shadow-md transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 group`}
+                >
+                  <div className="space-y-1.5 min-w-0">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <h3 className="text-base font-extrabold text-slate-900 group-hover:text-[#7E22CE] transition">{ev.nombre}</h3>
+                      <EtiquetaPospuestas cantidad={p.pospuestas} />
+                    </div>
+                    <p className="text-xs text-slate-600 font-medium">
+                      {ev.tipo || ev.categoria || 'Evento'} • Límite: {ev.fecha ? formatearFechaDisplay(ev.fecha) : 'Sin fecha'}
+                    </p>
                   </div>
-                  <p className="text-xs text-slate-500 font-medium">
-                    {ev.tipo || ev.categoria || 'Evento'} • Límite: {ev.fecha ? formatearFechaDisplay(ev.fecha) : 'Sin fecha'}
-                  </p>
-                </div>
 
-                <div className="flex items-center gap-6 justify-between sm:justify-end">
-                  <BarraProgreso completadas={p.completadas} total={p.total} titulo={`Progreso de ${ev.nombre}`} ocultarTitulo tamano="sm" className="w-full sm:w-52" />
-                  <span className="inline-flex items-center gap-1 text-xs font-bold text-[#7E22CE] bg-purple-50 group-hover:bg-[#7E22CE] group-hover:text-white px-3.5 py-2 rounded-xl transition whitespace-nowrap">
-                    Ver detalle <ChevronRight className="w-3.5 h-3.5" />
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                  <div className="flex items-center gap-6 justify-between sm:justify-end">
+                    <BarraProgreso completadas={p.completadas} total={p.total} titulo={`Progreso de ${ev.nombre}`} ocultarTitulo tamano="sm" className="w-full sm:w-52" />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEventoSeleccionadoId(String(ev.id));
+                      }}
+                      aria-label={`Ver detalle de ${ev.nombre}`}
+                      className={`inline-flex items-center gap-1 text-xs font-bold text-[#7E22CE] bg-purple-50 group-hover:bg-[#7E22CE] group-hover:text-white px-3.5 py-2 rounded-xl transition whitespace-nowrap cursor-pointer ${FOCO}`}
+                    >
+                      Ver detalle <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </>
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2.5">
-            <span className="px-3 py-1 bg-[#F3E8FF] text-[#7E22CE] border border-[#E9D5FF] rounded-full text-xs font-bold">{eventoActivo.estado || 'En preparación'}</span>
-            <span className="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded-full text-xs font-bold">{eventoActivo.tipo || eventoActivo.categoria || 'Evento'}</span>
-            <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 bg-white border border-slate-200 px-3 py-1 rounded-full">
-              <Calendar className="w-3.5 h-3.5 text-slate-400" /> Límite: {eventoActivo.fecha ? formatearFechaDisplay(eventoActivo.fecha) : 'Sin fecha'}
+            <span className="px-3 py-1 bg-[#F3E8FF] text-[#7E22CE] border border-[#E9D5FF] rounded-full text-xs font-bold">
+              <span className="sr-only">Estado: </span>{eventoActivo.estado || 'En preparación'}
+            </span>
+            <span className="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded-full text-xs font-bold">
+              <span className="sr-only">Tipo: </span>{eventoActivo.tipo || eventoActivo.categoria || 'Evento'}
+            </span>
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 bg-white border border-slate-200 px-3 py-1 rounded-full">
+              <Calendar className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" /> Límite: {eventoActivo.fecha ? formatearFechaDisplay(eventoActivo.fecha) : 'Sin fecha'}
             </span>
             {eventoActivo.limite_diario_horas && (
               <span className="inline-flex items-center gap-1 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-100 px-3 py-1 rounded-full">
-                <Clock className="w-3.5 h-3.5 text-purple-600" /> Máx. {eventoActivo.limite_diario_horas} h (total)
+                <Clock className="w-3.5 h-3.5 text-purple-700" aria-hidden="true" /> Máx. {eventoActivo.limite_diario_horas} h (total)
               </span>
             )}
           </div>
@@ -784,41 +935,40 @@ const DetalleEvento = () => {
             <BarraProgreso completadas={progreso.completadas} total={progreso.total} pospuestas={progreso.pospuestas} titulo="Progreso del evento" tamano="lg" />
           </div>
 
-          <div className={`${UI.tarjeta} space-y-5`}>
+          <section aria-labelledby="foco-fallback" className={`${UI.tarjeta} space-y-5`}>
             <div className="flex justify-between items-center pb-4 border-b border-slate-100">
-              <h2 className={UI.h2}>Subtareas</h2>
+              <h2 id="foco-fallback" tabIndex={-1} className={`${UI.h2} focus:outline-none`}>Subtareas</h2>
               <div className="flex items-center gap-3">
-                <span className="text-xs font-semibold text-slate-400 hidden sm:inline">{progreso.total} subtareas</span>
-                <button onClick={handleAbrirCrear} className={UI.btnAgregarSm}>
-                  <Plus className="w-4 h-4" /> Agregar subtarea
+                <span className="text-xs font-semibold text-slate-600 hidden sm:inline">{progreso.total} subtareas</span>
+                <button type="button" onClick={handleAbrirCrear} className={`${UI.btnAgregarSm} ${FOCO}`}>
+                  <Plus className="w-4 h-4" aria-hidden="true" /> Agregar subtarea
                 </button>
               </div>
             </div>
 
-            <div className="space-y-3">
-              {gestionesEv.length === 0 ? (
-                <p className="text-slate-400 text-sm text-center py-8">No hay subtareas creadas para este evento. Haz clic en "+ Agregar subtarea".</p>
-              ) : (
-                gestionesEv.map((sub) => {
+            {gestionesEv.length === 0 ? (
+              <p className="text-slate-600 text-sm text-center py-8">No hay subtareas creadas para este evento. Usa el botón "Agregar subtarea".</p>
+            ) : (
+              <ul className="space-y-3">
+                {gestionesEv.map((sub) => {
                   const pospuesta = esPospuesta(sub);
                   const mostrarNota = pospuesta && sub.nota_pospuesto && sub.nota_pospuesto !== NOTA_POR_DEFECTO;
                   return (
-                    <div
+                    <li
                       key={sub.id}
                       className={`p-4 border rounded-xl transition flex flex-col gap-3 ${
                         pospuesta
-                          ? 'bg-amber-50/50 hover:bg-amber-50 border-amber-200 border-l-4 border-l-amber-400'
+                          ? 'bg-amber-50/50 hover:bg-amber-50 border-amber-200 border-l-4 border-l-amber-500'
                           : 'bg-slate-50/50 hover:bg-slate-50 border-slate-200/80'
                       }`}
                     >
                       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                         <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
-                          <span
-                            title={sub.descripcion}
-                            className={`text-sm font-semibold truncate ${sub.completada ? 'line-through text-slate-400' : 'text-slate-900'}`}
-                          >
+                          {/* Sin truncar: el texto completo debe poder leerse con zoom o en pantallas angostas */}
+                          <span className={`text-sm font-semibold break-words ${sub.completada ? 'line-through text-slate-500' : 'text-slate-900'}`}>
                             {sub.descripcion}
                           </span>
+                          {sub.completada && <span className="sr-only">(completada)</span>}
                           {pospuesta && <EtiquetaPospuestas texto="Pospuesta" />}
                         </div>
 
@@ -826,17 +976,18 @@ const DetalleEvento = () => {
                           {sub.plazo && (
                             <span
                               className={`inline-flex items-center gap-1 text-xs font-medium ${
-                                pospuesta ? 'text-amber-800 font-semibold' : 'text-slate-500'
+                                pospuesta ? 'text-amber-800 font-semibold' : 'text-slate-600'
                               }`}
                             >
-                              <CalendarClock className={`w-3.5 h-3.5 ${pospuesta ? 'text-amber-600' : 'text-slate-400'}`} />
-                              {pospuesta ? 'Nueva fecha: ' : ''}
+                              <CalendarClock className={`w-3.5 h-3.5 ${pospuesta ? 'text-amber-700' : 'text-slate-500'}`} aria-hidden="true" />
+                              {pospuesta ? 'Nueva fecha: ' : 'Plazo: '}
                               {formatearFechaDisplay(sub.plazo)}
                             </span>
                           )}
                           {sub.horas_estimadas !== undefined && sub.horas_estimadas !== null && (
-                            <span className="inline-flex items-center gap-1 text-xs text-slate-500 font-medium">
-                              <Clock className="w-3.5 h-3.5 text-slate-400" /> {sub.horas_estimadas} h
+                            <span className="inline-flex items-center gap-1 text-xs text-slate-600 font-medium">
+                              <Clock className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" /> {sub.horas_estimadas} h
+                              <span className="sr-only"> estimadas</span>
                             </span>
                           )}
 
@@ -848,20 +999,22 @@ const DetalleEvento = () => {
 
                           <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
                             <button
+                              type="button"
                               onClick={() => handleAbrirEditar(sub)}
-                              className="p-1.5 text-slate-400 hover:text-purple-700 rounded-lg transition cursor-pointer"
-                              title="Editar subtarea"
-                              aria-label="Editar subtarea"
+                              className={`p-1.5 text-slate-600 hover:text-purple-700 rounded-lg transition cursor-pointer ${FOCO}`}
+                              aria-label={`Editar subtarea: ${sub.descripcion}`}
+                              aria-haspopup="dialog"
                             >
-                              <Edit3 className="w-4 h-4" />
+                              <Edit3 className="w-4 h-4" aria-hidden="true" />
                             </button>
                             <button
+                              type="button"
                               onClick={() => setGestionAEliminar(sub)}
-                              className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg transition cursor-pointer"
-                              title="Eliminar subtarea"
-                              aria-label="Eliminar subtarea"
+                              className={`p-1.5 text-slate-600 hover:text-red-700 rounded-lg transition cursor-pointer ${FOCO}`}
+                              aria-label={`Eliminar subtarea: ${sub.descripcion}`}
+                              aria-haspopup="dialog"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-4 h-4" aria-hidden="true" />
                             </button>
                           </div>
                         </div>
@@ -869,186 +1022,240 @@ const DetalleEvento = () => {
 
                       {mostrarNota && (
                         <div className="flex items-start gap-2 text-xs text-amber-900 bg-white/70 border border-amber-200 rounded-lg px-3 py-2 w-full">
-                          <StickyNote className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-amber-600" />
+                          <StickyNote className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-amber-700" aria-hidden="true" />
                           <p className="leading-relaxed break-words">
                             <span className="font-semibold">Motivo:</span> {sub.nota_pospuesto}
                           </p>
                         </div>
                       )}
-                    </div>
+                    </li>
                   );
-                })
-              )}
-            </div>
-          </div>
+                })}
+              </ul>
+            )}
+          </section>
         </>
       )}
 
       {/* MODAL: EDITAR EVENTO */}
       {modalEvento && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div role="dialog" aria-modal="true" className={UI.modal}>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h3 className={UI.modalTitulo}>Editar evento</h3>
-                <p className={UI.modalSubtitulo}>Actualiza los datos generales y la capacidad diaria de trabajo.</p>
-              </div>
-              <button type="button" onClick={() => setModalEvento(false)} className="p-1 text-slate-400 hover:text-slate-600 transition cursor-pointer" aria-label="Cerrar">
-                <X className="w-5 h-5" />
-              </button>
+        <Modal onCerrar={() => setModalEvento(false)} labelledBy="titulo-editar-evento" describedBy="desc-editar-evento" className={UI.modal}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 id="titulo-editar-evento" className={UI.modalTitulo}>Editar evento</h2>
+              <p id="desc-editar-evento" className={UI.modalSubtitulo}>Actualiza los datos generales y la capacidad diaria de trabajo.</p>
+            </div>
+            <BotonCerrar onClick={() => setModalEvento(false)} />
+          </div>
+
+          <form onSubmit={handleGuardarEvento} noValidate className="mt-6 space-y-5">
+            <div>
+              <label htmlFor="evento-nombre" className={UI.label}>
+                Nombre del evento <Asterisco />
+              </label>
+              <input
+                type="text"
+                data-autofocus
+                aria-required="true"
+                autoComplete="off"
+                className={`${errEvento.campo === 'nombre' ? UI.inputError : UI.input} ${FOCO}`}
+                value={formEvento.nombre}
+                {...attrsCampo(errEvento, 'nombre', 'evento-nombre')}
+                onChange={(e) => {
+                  setFormEvento({ ...formEvento, nombre: e.target.value });
+                  setErrEvento(SIN_ERROR);
+                }}
+              />
+              <MensajeCampo id="evento-nombre-error" texto={errEvento.campo === 'nombre' ? errEvento.texto : ''} />
             </div>
 
-            <form onSubmit={handleGuardarEvento} className="mt-6 space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className={UI.label}>Nombre del evento</label>
-                <input
-                  type="text"
-                  required
-                  className={UI.input}
-                  value={formEvento.nombre}
-                  onChange={(e) => setFormEvento({ ...formEvento, nombre: e.target.value })}
+                <label htmlFor="evento-tipo" className={UI.label}>Tipo de evento</label>
+                <select
+                  className={`${UI.input} cursor-pointer ${FOCO}`}
+                  value={formEvento.tipo}
+                  {...attrsCampo(errEvento, 'tipo', 'evento-tipo')}
+                  onChange={(e) => setFormEvento({ ...formEvento, tipo: e.target.value })}
+                >
+                  <option value="">Selecciona</option>
+                  <option value="Corporativo">Corporativo</option>
+                  <option value="Social">Social</option>
+                  <option value="Academico">Académico</option>
+                  <option value="Otro">Otro</option>
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="evento-fecha" className={UI.label}>
+                  Fecha límite <Asterisco />
+                </label>
+                <DateField
+                  min={hoyStr}
+                  aria-required="true"
+                  invalido={errEvento.campo === 'fecha'}
+                  value={formEvento.fecha}
+                  {...attrsCampo(errEvento, 'fecha', 'evento-fecha')}
+                  onChange={(e) => {
+                    setFormEvento({ ...formEvento, fecha: e.target.value });
+                    setErrEvento(SIN_ERROR);
+                  }}
                 />
+                <MensajeCampo id="evento-fecha-error" texto={errEvento.campo === 'fecha' ? errEvento.texto : ''} />
               </div>
+            </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className={UI.label}>Tipo de evento</label>
-                  <select
-                    className={`${UI.input} cursor-pointer`}
-                    value={formEvento.tipo}
-                    onChange={(e) => setFormEvento({ ...formEvento, tipo: e.target.value })}
-                  >
-                    <option value="">Selecciona</option>
-                    <option value="Corporativo">Corporativo</option>
-                    <option value="Social">Social</option>
-                    <option value="Academico">Académico</option>
-                    <option value="Otro">Otro</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className={UI.label}>Fecha límite</label>
-                  <DateField required min={hoyStr} placeholder="Ej. 20/09/2026" value={formEvento.fecha} onChange={(e) => setFormEvento({ ...formEvento, fecha: e.target.value })} />
-                </div>
+            <div>
+              <label htmlFor="evento-limite" className={UI.label}>
+                Máximo de horas por día <Asterisco />
+              </label>
+              <div className="relative">
+                <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" aria-hidden="true" />
+                <input
+                  type="number"
+                  step="0.5"
+                  min="1"
+                  max="24"
+                  aria-required="true"
+                  placeholder="Ej. 6"
+                  className={`${limiteMuyBajo || errEvento.campo === 'limite' ? UI.inputError : UI.input} pl-11 pr-24 ${FOCO}`}
+                  value={formEvento.limite_diario_horas}
+                  {...attrsCampo(errEvento, 'limite', 'evento-limite', limiteMuyBajo ? 'evento-limite-aviso' : undefined)}
+                  aria-invalid={limiteMuyBajo || errEvento.campo === 'limite' ? 'true' : undefined}
+                  onChange={(e) => {
+                    setFormEvento({ ...formEvento, limite_diario_horas: e.target.value });
+                    setErrEvento(SIN_ERROR);
+                  }}
+                />
+                <span aria-hidden="true" className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-600 pointer-events-none">h/día</span>
               </div>
+              <MensajeCampo id="evento-limite-error" texto={errEvento.campo === 'limite' ? errEvento.texto : ''} />
+              {limiteMuyBajo && errEvento.campo !== 'limite' && (
+                <p id="evento-limite-aviso" role="alert" className={UI.error}>
+                  Tus subtareas ya suman {horasSubtareasTotal} h. Reduce o elimina subtareas, o usa un límite de {horasSubtareasTotal} h o más.
+                </p>
+              )}
+            </div>
 
-              <div>
-                <label className={UI.label}>Máximo de horas por día</label>
-                <div className="relative">
-                  <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="1"
-                    max="24"
-                    required
-                    placeholder="Ej. 6"
-                    className={`${limiteMuyBajo ? UI.inputError : UI.input} pl-11 pr-24`}
-                    value={formEvento.limite_diario_horas}
-                    onChange={(e) => setFormEvento({ ...formEvento, limite_diario_horas: e.target.value })}
-                  />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400 pointer-events-none">h/día</span>
-                </div>
-                {limiteMuyBajo && (
-                  <p className={UI.error}>
-                    Tus subtareas ya suman {horasSubtareasTotal} h. Reduce o elimina subtareas, o usa un límite de {horasSubtareasTotal} h o más.
-                  </p>
-                )}
-              </div>
+            <MensajeCampo id="evento-general-error" texto={errEvento.campo === 'general' ? errEvento.texto : ''} />
 
-              <div className="flex justify-end gap-3 pt-5 border-t border-slate-100">
-                <button type="button" onClick={() => setModalEvento(false)} className={UI.btnSecundario}>
-                  Cancelar
-                </button>
-                <button type="submit" className={UI.btnPrimario}>
-                  Guardar cambios
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div className="flex justify-end gap-3 pt-5 border-t border-slate-100">
+              <button type="button" onClick={() => setModalEvento(false)} className={`${UI.btnSecundario} ${FOCO}`}>
+                Cancelar
+              </button>
+              <button type="submit" className={`${UI.btnPrimario} ${FOCO}`}>
+                Guardar cambios
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {/* MODAL: CREAR / EDITAR SUBTAREA */}
       {modalGestion.abierto && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div role="dialog" aria-modal="true" className={UI.modal}>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h3 className={UI.modalTitulo}>{modalGestion.modo === 'crear' ? 'Agregar subtarea' : 'Editar subtarea'}</h3>
-                <p className={UI.modalSubtitulo}>
-                  {modalGestion.modo === 'crear' ? 'Añade una nueva subtarea a este evento.' : 'Actualiza los datos de esta subtarea.'}
-                </p>
-              </div>
-              <button type="button" onClick={() => setModalGestion(MODAL_GESTION_CERRADO)} className="p-1 text-slate-400 hover:text-slate-600 transition cursor-pointer" aria-label="Cerrar">
-                <X className="w-5 h-5" />
-              </button>
+        <Modal onCerrar={() => setModalGestion(MODAL_GESTION_CERRADO)} labelledBy="titulo-gestion" describedBy="desc-gestion" className={UI.modal}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 id="titulo-gestion" className={UI.modalTitulo}>{modalGestion.modo === 'crear' ? 'Agregar subtarea' : 'Editar subtarea'}</h2>
+              <p id="desc-gestion" className={UI.modalSubtitulo}>
+                {modalGestion.modo === 'crear' ? 'Añade una nueva subtarea a este evento.' : 'Actualiza los datos de esta subtarea.'}
+              </p>
+            </div>
+            <BotonCerrar onClick={() => setModalGestion(MODAL_GESTION_CERRADO)} />
+          </div>
+
+          <form onSubmit={handleGuardarGestion} noValidate className="mt-6 space-y-5">
+            <div>
+              <label htmlFor="gestion-descripcion" className={UI.label}>
+                Nombre de la subtarea <Asterisco />
+              </label>
+              <input
+                type="text"
+                data-autofocus
+                aria-required="true"
+                autoComplete="off"
+                placeholder="Ej. Confirmar servicio de catering"
+                className={`${errGestion.campo === 'descripcion' ? UI.inputError : UI.input} ${FOCO}`}
+                value={formGestion.descripcion}
+                {...attrsCampo(errGestion, 'descripcion', 'gestion-descripcion')}
+                onChange={(e) => {
+                  setFormGestion({ ...formGestion, descripcion: e.target.value });
+                  setErrGestion(SIN_ERROR);
+                }}
+              />
+              <MensajeCampo id="gestion-descripcion-error" texto={errGestion.campo === 'descripcion' ? errGestion.texto : ''} />
             </div>
 
-            <form onSubmit={handleGuardarGestion} className="mt-6 space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className={UI.label}>Nombre de la subtarea</label>
-                <input
-                  type="text"
-                  required
-                  autoFocus
-                  placeholder="Ej. Confirmar servicio de catering"
-                  className={UI.input}
-                  value={formGestion.descripcion}
-                  onChange={(e) => setFormGestion({ ...formGestion, descripcion: e.target.value })}
+                <label htmlFor="gestion-plazo" className={UI.label}>Fecha</label>
+                <DateField
+                  min={hoyStr}
+                  max={limpiarFecha(eventoActivo?.fecha) || undefined}
+                  invalido={errGestion.campo === 'plazo'}
+                  value={formGestion.plazo}
+                  {...attrsCampo(errGestion, 'plazo', 'gestion-plazo')}
+                  onChange={(e) => {
+                    setFormGestion({ ...formGestion, plazo: e.target.value });
+                    setErrGestion(SIN_ERROR);
+                  }}
                 />
+                <MensajeCampo id="gestion-plazo-error" texto={errGestion.campo === 'plazo' ? errGestion.texto : ''} />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className={UI.label}>Fecha</label>
-                  <DateField min={hoyStr} max={limpiarFecha(eventoActivo?.fecha) || undefined} placeholder="Ej. 20/09/2026" value={formGestion.plazo} onChange={(e) => setFormGestion({ ...formGestion, plazo: e.target.value })} />
+              <div>
+                <label htmlFor="gestion-horas" className={UI.label}>
+                  Horas estimadas <Asterisco />
+                </label>
+                <div className="relative">
+                  <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" aria-hidden="true" />
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0.5"
+                    max="24"
+                    aria-required="true"
+                    placeholder="Ej. 2.5"
+                    className={`${excedeSubtarea || errGestion.campo === 'horas' ? UI.inputError : UI.input} pl-11 ${FOCO}`}
+                    value={formGestion.horas_estimadas}
+                    {...attrsCampo(errGestion, 'horas', 'gestion-horas', limiteActual > 0 ? 'gestion-horas-ayuda' : undefined)}
+                    aria-invalid={excedeSubtarea || errGestion.campo === 'horas' ? 'true' : undefined}
+                    onChange={(e) => {
+                      setFormGestion({ ...formGestion, horas_estimadas: e.target.value });
+                      setErrGestion(SIN_ERROR);
+                    }}
+                  />
                 </div>
-
-                <div>
-                  <label className={UI.label}>Horas estimadas</label>
-                  <div className="relative">
-                    <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                    <input
-                      type="number"
-                      step="0.5"
-                      min="0.5"
-                      max="24"
-                      required
-                      placeholder="Ej. 2.5"
-                      className={`${excedeSubtarea ? UI.inputError : UI.input} pl-11`}
-                      value={formGestion.horas_estimadas}
-                      onChange={(e) => setFormGestion({ ...formGestion, horas_estimadas: e.target.value })}
-                    />
-                  </div>
-                </div>
+                <MensajeCampo id="gestion-horas-error" texto={errGestion.campo === 'horas' ? errGestion.texto : ''} />
               </div>
+            </div>
 
-              {limiteActual > 0 && (
-                <p className={`text-xs font-medium ${excedeSubtarea ? 'text-red-600' : 'text-slate-500'}`}>
-                  {excedeSubtarea
-                    ? `Superas el límite: ${horasOtras + horasNuevas} h de ${limiteActual} h. Reduce las horas o aumenta el límite del evento.`
-                    : `Disponibles: ${Math.max(limiteActual - horasOtras, 0)} h de ${limiteActual} h.`}
-                </p>
-              )}
+            {limiteActual > 0 && (
+              <p id="gestion-horas-ayuda" className={`text-xs font-medium ${excedeSubtarea ? 'text-red-700' : 'text-slate-600'}`}>
+                {excedeSubtarea
+                  ? `Superas el límite: ${horasOtras + horasNuevas} h de ${limiteActual} h. Reduce las horas o aumenta el límite del evento.`
+                  : `Disponibles: ${Math.max(limiteActual - horasOtras, 0)} h de ${limiteActual} h.`}
+              </p>
+            )}
 
-              <div className="flex justify-end gap-3 pt-5 border-t border-slate-100">
-                <button type="button" onClick={() => setModalGestion(MODAL_GESTION_CERRADO)} className={UI.btnSecundario}>
-                  Cancelar
-                </button>
-                <button type="submit" className={UI.btnPrimario}>
-                  {modalGestion.modo === 'crear' ? (
-                    <>
-                      <Plus className="w-4 h-4" /> Agregar subtarea
-                    </>
-                  ) : (
-                    'Guardar cambios'
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <MensajeCampo id="gestion-general-error" texto={errGestion.campo === 'general' ? errGestion.texto : ''} />
+
+            <div className="flex justify-end gap-3 pt-5 border-t border-slate-100">
+              <button type="button" onClick={() => setModalGestion(MODAL_GESTION_CERRADO)} className={`${UI.btnSecundario} ${FOCO}`}>
+                Cancelar
+              </button>
+              <button type="submit" className={`${UI.btnPrimario} ${FOCO}`}>
+                {modalGestion.modo === 'crear' ? (
+                  <>
+                    <Plus className="w-4 h-4" aria-hidden="true" /> Agregar subtarea
+                  </>
+                ) : (
+                  'Guardar cambios'
+                )}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {gestionAEliminar && (

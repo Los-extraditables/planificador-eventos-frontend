@@ -4,6 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { Aviso, EncabezadoPagina, UI } from '../components/ui';
 import { authService } from '../services/authService';
 
+// Anillo de foco visible y consistente para los controles definidos en este archivo
+const FOCO = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-700 focus-visible:ring-offset-2';
+
+const nuevaGestion = () => ({ id: Date.now() + Math.random(), descripcion: '', plazo: '', horas_estimadas: '' });
+
 const CrearEvento = ({ onEventoCreado }) => {
   const navigate = useNavigate();
   const API_URL = import.meta.env.VITE_API_URL || 'https://planificador-eventos-backend.onrender.com/api';
@@ -22,14 +27,13 @@ const CrearEvento = ({ onEventoCreado }) => {
     limite_diario_horas: ''
   });
 
-  const [gestiones, setGestiones] = useState([
-    { id: Date.now(), descripcion: '', plazo: '', horas_estimadas: '' }
-  ]);
+  const [gestiones, setGestiones] = useState([nuevaGestion()]);
 
   const [cargando, setCargando] = useState(false);
   const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
   const [errores, setErrores] = useState({});
   const timerMensaje = useRef(null);
+  const focoPendiente = useRef(null); // id del elemento que debe recibir el foco tras un cambio en la lista
 
   const mostrarMensaje = (tipo, texto) => {
     clearTimeout(timerMensaje.current);
@@ -37,6 +41,14 @@ const CrearEvento = ({ onEventoCreado }) => {
     timerMensaje.current = setTimeout(() => setMensaje({ tipo: '', texto: '' }), 5000);
   };
   useEffect(() => () => clearTimeout(timerMensaje.current), []);
+
+  // Tras agregar o eliminar una subtarea, el foco no se pierde
+  useEffect(() => {
+    if (focoPendiente.current) {
+      document.getElementById(focoPendiente.current)?.focus();
+      focoPendiente.current = null;
+    }
+  }, [gestiones]);
 
   const handleSesionExpirada = () => {
     authService.logout();
@@ -50,17 +62,19 @@ const CrearEvento = ({ onEventoCreado }) => {
   };
 
   const handleAgregarSubtarea = () => {
-    setGestiones([
-      ...gestiones,
-      { id: Date.now(), descripcion: '', plazo: '', horas_estimadas: '' }
-    ]);
+    const nueva = nuevaGestion();
+    focoPendiente.current = `subtarea-descripcion-${nueva.id}`;
+    setGestiones([...gestiones, nueva]);
   };
 
   const handleEliminarSubtarea = (id) => {
     if (gestiones.length === 1) {
-      setGestiones([{ id: Date.now(), descripcion: '', plazo: '', horas_estimadas: '' }]);
+      const nueva = nuevaGestion();
+      focoPendiente.current = `subtarea-descripcion-${nueva.id}`;
+      setGestiones([nueva]);
       return;
     }
+    focoPendiente.current = 'btn-agregar-subtarea';
     setGestiones(gestiones.filter(g => g.id !== id));
   };
 
@@ -74,15 +88,16 @@ const CrearEvento = ({ onEventoCreado }) => {
 
   const hayExcesoGlobal = limiteGlobal > 0 && horasAsignadasTotal > limiteGlobal;
 
+  // Devuelve los errores y el id del primer campo inválido (en orden visual)
   const validarFormulario = () => {
     const nuevosErrores = {};
 
-    if (!formEvento.nombre.trim()) nuevosErrores.nombre = 'Este campo es obligatorio.';
-    if (!formEvento.tipo) nuevosErrores.tipo = 'Selecciona un tipo.';
+    if (!formEvento.nombre.trim()) nuevosErrores.nombre = 'Escribe el nombre del evento.';
+    if (!formEvento.tipo) nuevosErrores.tipo = 'Selecciona un tipo de evento.';
     if (!formEvento.fecha) {
-      nuevosErrores.fecha = 'Este campo es obligatorio.';
+      nuevosErrores.fecha = 'Selecciona la fecha límite del evento.';
     } else if (formEvento.fecha < hoyStr) {
-      nuevosErrores.fecha = 'La fecha no puede ser anterior a hoy.';
+      nuevosErrores.fecha = 'La fecha no puede ser anterior a hoy. Elige hoy o una fecha futura.';
     }
 
     if (
@@ -90,24 +105,35 @@ const CrearEvento = ({ onEventoCreado }) => {
       isNaN(formEvento.limite_diario_horas) ||
       parseFloat(formEvento.limite_diario_horas) <= 0
     ) {
-      nuevosErrores.limite_diario_horas = 'Ingresa un número mayor a 0.';
+      nuevosErrores.limite_diario_horas = 'Ingresa un número de horas mayor a 0.';
     }
 
     setErrores(nuevosErrores);
-    return Object.keys(nuevosErrores).length === 0 && !hayExcesoGlobal;
+
+    const orden = ['nombre', 'tipo', 'fecha', 'limite_diario_horas'];
+    const primero = orden.find((c) => nuevosErrores[c]);
+    const hayErrores = Boolean(primero);
+
+    return {
+      ok: !hayErrores && !hayExcesoGlobal,
+      // Si solo falla el exceso de horas, el foco va al campo del límite, que es el que puede corregirse
+      idPrimero: primero ? `campo-${primero}` : hayExcesoGlobal ? 'campo-limite_diario_horas' : null
+    };
   };
 
   const limpiarFormulario = () => {
     setFormEvento({ nombre: '', tipo: '', fecha: '', limite_diario_horas: '' });
-    setGestiones([{ id: Date.now(), descripcion: '', plazo: '', horas_estimadas: '' }]);
+    setGestiones([nuevaGestion()]);
     setErrores({});
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!validarFormulario()) {
-      mostrarMensaje('error', 'Por favor corrige los campos con errores.');
+    const { ok, idPrimero } = validarFormulario();
+    if (!ok) {
+      mostrarMensaje('error', 'Hay campos con errores. Corrígelos para guardar el evento.');
+      if (idPrimero) document.getElementById(idPrimero)?.focus();
       return;
     }
 
@@ -184,47 +210,88 @@ const CrearEvento = ({ onEventoCreado }) => {
     }
   };
 
+  // Atributos comunes de accesibilidad para un campo con posible error
+  const propsCampo = (campo, ayudaId) => {
+    const ids = [ayudaId, errores[campo] ? `error-${campo}` : null].filter(Boolean).join(' ');
+    return {
+      id: `campo-${campo}`,
+      'aria-required': 'true',
+      'aria-invalid': errores[campo] ? 'true' : 'false',
+      'aria-describedby': ids || undefined
+    };
+  };
+
+  const MensajeError = ({ campo }) =>
+    errores[campo] ? (
+      <p id={`error-${campo}`} role="alert" className={UI.error}>
+        {errores[campo]}
+      </p>
+    ) : null;
+
+  const Asterisco = () => (
+    <span className="text-red-700" aria-hidden="true">*</span>
+  );
+
   return (
     <div className={UI.pagina}>
-      {mensaje.texto && <Aviso tipo={mensaje.tipo} texto={mensaje.texto} />}
+      {/* Aviso visible (oculto al lector de pantalla para no duplicar) */}
+      {mensaje.texto && (
+        <div aria-hidden="true">
+          <Aviso tipo={mensaje.tipo} texto={mensaje.texto} />
+        </div>
+      )}
+      {/* Regiones en vivo siempre presentes: anuncian éxito y errores */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {mensaje.tipo !== 'error' ? mensaje.texto : ''}
+      </div>
+      <div role="alert" className="sr-only">
+        {mensaje.tipo === 'error' ? mensaje.texto : ''}
+      </div>
 
       <EncabezadoPagina
         titulo="Crear evento"
         subtitulo="Registra los datos generales del evento y añade sus subtareas."
       />
 
-      <form onSubmit={handleSubmit} noValidate className="space-y-6">
+      <form onSubmit={handleSubmit} noValidate aria-busy={cargando} className="space-y-6">
         {/* SECCIÓN 1: DATOS DEL EVENTO */}
-        <div className={`${UI.tarjeta} space-y-6`}>
-          <h2 className={UI.h2}>Datos del evento</h2>
+        <section aria-labelledby="titulo-datos-evento" className={`${UI.tarjeta} space-y-6`}>
+          <h2 id="titulo-datos-evento" className={UI.h2}>Datos del evento</h2>
+          <p className="text-xs text-slate-600">
+            Los campos marcados con <span aria-hidden="true" className="text-red-700">*</span>
+            <span className="sr-only">asterisco</span> son obligatorios.
+          </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
             {/* Nombre del Evento */}
             <div>
-              <label className={UI.label}>
-                Nombre del evento <span className="text-red-500">*</span>
+              <label htmlFor="campo-nombre" className={UI.label}>
+                Nombre del evento <Asterisco />
               </label>
               <input
                 type="text"
                 placeholder="Ej. Lanzamiento Producto X"
-                className={errores.nombre ? UI.inputError : UI.input}
+                autoComplete="off"
+                className={`${errores.nombre ? UI.inputError : UI.input} ${FOCO}`}
                 value={formEvento.nombre}
+                {...propsCampo('nombre')}
                 onChange={(e) => {
                   setFormEvento({ ...formEvento, nombre: e.target.value });
                   if (errores.nombre) setErrores({ ...errores, nombre: null });
                 }}
               />
-              {errores.nombre && <p className={UI.error}>{errores.nombre}</p>}
+              <MensajeError campo="nombre" />
             </div>
 
             {/* Tipo de Evento */}
             <div>
-              <label className={UI.label}>
-                Tipo <span className="text-red-500">*</span>
+              <label htmlFor="campo-tipo" className={UI.label}>
+                Tipo <Asterisco />
               </label>
               <select
-                className={`${errores.tipo ? UI.inputError : UI.input} cursor-pointer`}
+                className={`${errores.tipo ? UI.inputError : UI.input} cursor-pointer ${FOCO}`}
                 value={formEvento.tipo}
+                {...propsCampo('tipo')}
                 onChange={(e) => {
                   setFormEvento({ ...formEvento, tipo: e.target.value });
                   if (errores.tipo) setErrores({ ...errores, tipo: null });
@@ -236,31 +303,32 @@ const CrearEvento = ({ onEventoCreado }) => {
                 <option value="Academico">Académico</option>
                 <option value="Otro">Otro</option>
               </select>
-              {errores.tipo && <p className={UI.error}>{errores.tipo}</p>}
+              <MensajeError campo="tipo" />
             </div>
 
             {/* Fecha límite del Evento */}
             <div>
-              <label className={UI.label}>
-                Fecha límite del evento <span className="text-red-500">*</span>
+              <label htmlFor="campo-fecha" className={UI.label}>
+                Fecha límite del evento <Asterisco />
               </label>
               <input
                 type="date"
                 min={hoyStr}
-                className={errores.fecha ? UI.inputError : UI.input}
+                className={`${errores.fecha ? UI.inputError : UI.input} ${FOCO}`}
                 value={formEvento.fecha}
+                {...propsCampo('fecha')}
                 onChange={(e) => {
                   setFormEvento({ ...formEvento, fecha: e.target.value });
                   if (errores.fecha) setErrores({ ...errores, fecha: null });
                 }}
               />
-              {errores.fecha && <p className={UI.error}>{errores.fecha}</p>}
+              <MensajeError campo="fecha" />
             </div>
 
             {/* Límite diario de carga de trabajo */}
             <div>
-              <label className={UI.label}>
-                Límite diario de carga de trabajo <span className="text-red-500">*</span>
+              <label htmlFor="campo-limite_diario_horas" className={UI.label}>
+                Límite diario de carga de trabajo (horas) <Asterisco />
               </label>
               <div className="relative">
                 <input
@@ -268,88 +336,96 @@ const CrearEvento = ({ onEventoCreado }) => {
                   step="0.5"
                   min="0.5"
                   placeholder="Ej. 6"
-                  className={`${errores.limite_diario_horas ? UI.inputError : UI.input} pr-40`}
+                  className={`${errores.limite_diario_horas ? UI.inputError : UI.input} pr-40 ${FOCO}`}
                   value={formEvento.limite_diario_horas}
+                  {...propsCampo('limite_diario_horas', 'ayuda-limite')}
                   onChange={(e) => {
                     setFormEvento({ ...formEvento, limite_diario_horas: e.target.value });
                     if (errores.limite_diario_horas)
                       setErrores({ ...errores, limite_diario_horas: null });
                   }}
                 />
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-medium pointer-events-none flex items-center gap-1">
+                <span
+                  aria-hidden="true"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs font-medium pointer-events-none flex items-center gap-1"
+                >
                   <Clock className="w-3.5 h-3.5" /> h (límite total)
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-2 font-medium flex items-center gap-1.5">
-                <Info className="w-3.5 h-3.5 shrink-0" />
+              <p id="ayuda-limite" className="text-xs text-slate-600 mt-2 font-medium flex items-center gap-1.5">
+                <Info className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                 Total máximo de horas estimadas para todas las subtareas.
               </p>
-              {errores.limite_diario_horas && (
-                <p className={UI.error}>{errores.limite_diario_horas}</p>
-              )}
+              <MensajeError campo="limite_diario_horas" />
             </div>
           </div>
-        </div>
+        </section>
 
         {/* SECCIÓN 2: SUBTAREAS INICIALES */}
-        <div className={`${UI.tarjeta} space-y-6`}>
+        <section aria-labelledby="titulo-subtareas" className={`${UI.tarjeta} space-y-6`}>
           <div>
-            <h2 className={UI.h2}>Subtareas iniciales</h2>
+            <h2 id="titulo-subtareas" className={UI.h2}>Subtareas iniciales</h2>
             <p className={UI.subtitulo}>Define las subtareas necesarias para organizar el evento.</p>
           </div>
 
           {/* BANNER DE AVISO OPCIONAL */}
           <div className="bg-purple-50/60 border border-purple-100 text-purple-800 px-4 py-2.5 rounded-xl text-xs font-medium flex items-center gap-2">
-            <Info className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+            <Info className="w-3.5 h-3.5 text-purple-700 shrink-0" aria-hidden="true" />
             <span>No es obligatorio crear una subtarea</span>
           </div>
 
-          {/* AVISO DINÁMICO DE CARGA DE TRABAJO */}
-          {horasAsignadasTotal > 0 && (
-            <div
-              className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
-                hayExcesoGlobal
-                  ? 'bg-red-50/70 border-red-200 text-red-950'
-                  : 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Clock
-                  className={`w-4 h-4 shrink-0 ${
-                    hayExcesoGlobal ? 'text-red-600' : 'text-emerald-600'
-                  }`}
-                />
-                <p className="text-xs font-medium">
-                  {hayExcesoGlobal ? (
-                    <>
-                      Asignaste <strong>{horasAsignadasTotal} h</strong> y el límite es{' '}
-                      <strong>{limiteGlobal} h</strong>. Reduce las horas de las subtareas o
-                      aumenta el límite.
-                    </>
-                  ) : (
-                    <>
-                      Distribución correcta: <strong>{horasAsignadasTotal} h</strong>{' '}
-                      asignadas de un límite diario de carga de trabajo de{' '}
-                      <strong>{limiteGlobal} h</strong>.
-                    </>
-                  )}
-                </p>
+          {/* AVISO DINÁMICO DE CARGA DE TRABAJO (se anuncia cuando cambia; el estado se dice con texto, no solo con color) */}
+          <div role="status" aria-live="polite">
+            {horasAsignadasTotal > 0 && (
+              <div
+                className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+                  hayExcesoGlobal
+                    ? 'bg-red-50/70 border-red-200 text-red-950'
+                    : 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Clock
+                    aria-hidden="true"
+                    className={`w-4 h-4 shrink-0 ${
+                      hayExcesoGlobal ? 'text-red-700' : 'text-emerald-700'
+                    }`}
+                  />
+                  <p className="text-xs font-medium">
+                    {hayExcesoGlobal ? (
+                      <>
+                        Asignaste <strong>{horasAsignadasTotal} h</strong> y el límite es{' '}
+                        <strong>{limiteGlobal} h</strong>. Reduce las horas de las subtareas o
+                        aumenta el límite.
+                      </>
+                    ) : (
+                      <>
+                        Distribución correcta: <strong>{horasAsignadasTotal} h</strong>{' '}
+                        asignadas de un límite diario de carga de trabajo de{' '}
+                        <strong>{limiteGlobal} h</strong>.
+                      </>
+                    )}
+                  </p>
+                </div>
+
+                {hayExcesoGlobal ? (
+                  <span className="text-xs font-bold bg-red-100 text-red-700 px-2.5 py-1 rounded-lg shrink-0">
+                    Exceso de {(horasAsignadasTotal - limiteGlobal).toFixed(1)} h
+                  </span>
+                ) : (
+                  <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-lg shrink-0">
+                    En rango
+                  </span>
+                )}
               </div>
+            )}
+          </div>
 
-              {hayExcesoGlobal ? (
-                <span className="text-[11px] font-bold bg-red-100 text-red-700 px-2.5 py-1 rounded-lg shrink-0">
-                  Exceso de {(horasAsignadasTotal - limiteGlobal).toFixed(1)} h
-                </span>
-              ) : (
-                <span className="text-[11px] font-bold bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-lg shrink-0">
-                  En rango
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* TÍTULOS DE COLUMNAS */}
-          <div className="hidden sm:grid grid-cols-12 gap-3 px-1 text-slate-400 text-[11px] font-bold uppercase tracking-wider">
+          {/* TÍTULOS DE COLUMNAS (visuales; cada campo ya tiene su propia etiqueta accesible) */}
+          <div
+            aria-hidden="true"
+            className="hidden sm:grid grid-cols-12 gap-3 px-1 text-slate-600 text-xs font-bold uppercase tracking-wider"
+          >
             <span className="col-span-6">NOMBRE DE LA SUBTAREA</span>
             <span className="col-span-3">PLAZO</span>
             <span className="col-span-2">HORAS EST.</span>
@@ -358,14 +434,24 @@ const CrearEvento = ({ onEventoCreado }) => {
 
           {/* LISTADO DE SUBTAREAS */}
           <div className="space-y-4">
-            {gestiones.map((gest) => (
-              <div key={gest.id} className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+            {gestiones.map((gest, i) => (
+              <div
+                key={gest.id}
+                role="group"
+                aria-label={`Subtarea ${i + 1}`}
+                className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center"
+              >
                 {/* Nombre */}
                 <div className="sm:col-span-6">
+                  <label htmlFor={`subtarea-descripcion-${gest.id}`} className="sr-only">
+                    Nombre de la subtarea {i + 1}
+                  </label>
                   <input
+                    id={`subtarea-descripcion-${gest.id}`}
                     type="text"
                     placeholder="Ej. Confirmar catering"
-                    className={UI.input}
+                    autoComplete="off"
+                    className={`${UI.input} ${FOCO}`}
                     value={gest.descripcion}
                     onChange={(e) => handleGestionChange(gest.id, 'descripcion', e.target.value)}
                   />
@@ -373,11 +459,15 @@ const CrearEvento = ({ onEventoCreado }) => {
 
                 {/* Plazo */}
                 <div className="sm:col-span-3">
+                  <label htmlFor={`subtarea-plazo-${gest.id}`} className="sr-only">
+                    Plazo de la subtarea {i + 1}
+                  </label>
                   <input
+                    id={`subtarea-plazo-${gest.id}`}
                     type="date"
                     min={hoyStr}
                     max={formEvento.fecha || undefined}
-                    className={UI.input}
+                    className={`${UI.input} ${FOCO}`}
                     value={gest.plazo}
                     onChange={(e) => handleGestionChange(gest.id, 'plazo', e.target.value)}
                   />
@@ -385,12 +475,16 @@ const CrearEvento = ({ onEventoCreado }) => {
 
                 {/* Horas estimadas */}
                 <div className="sm:col-span-2">
+                  <label htmlFor={`subtarea-horas-${gest.id}`} className="sr-only">
+                    Horas estimadas de la subtarea {i + 1}
+                  </label>
                   <input
+                    id={`subtarea-horas-${gest.id}`}
                     type="number"
                     step="0.5"
                     min="0"
                     placeholder="Ej. 2.5"
-                    className={UI.input}
+                    className={`${UI.input} ${FOCO}`}
                     value={gest.horas_estimadas}
                     onChange={(e) => handleGestionChange(gest.id, 'horas_estimadas', e.target.value)}
                   />
@@ -401,29 +495,33 @@ const CrearEvento = ({ onEventoCreado }) => {
                   <button
                     type="button"
                     onClick={() => handleEliminarSubtarea(gest.id)}
-                    className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg transition cursor-pointer"
-                    title="Eliminar subtarea"
-                    aria-label="Eliminar subtarea"
+                    className={`p-1.5 text-slate-600 hover:text-red-700 rounded-lg transition cursor-pointer ${FOCO}`}
+                    aria-label={`Eliminar subtarea ${i + 1}`}
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-4 h-4" aria-hidden="true" />
                   </button>
                 </div>
               </div>
             ))}
           </div>
 
-          <button type="button" onClick={handleAgregarSubtarea} className={UI.btnAgregarSm}>
-            <Plus className="w-4 h-4" /> Agregar otra subtarea
+          <button
+            id="btn-agregar-subtarea"
+            type="button"
+            onClick={handleAgregarSubtarea}
+            className={`${UI.btnAgregarSm} ${FOCO}`}
+          >
+            <Plus className="w-4 h-4" aria-hidden="true" /> Agregar otra subtarea
           </button>
-        </div>
+        </section>
 
         {/* BOTONES FINALES */}
         <div className="flex items-center justify-end gap-3 pt-2">
-          <button type="button" onClick={limpiarFormulario} className={UI.btnSecundario}>
+          <button type="button" onClick={limpiarFormulario} className={`${UI.btnSecundario} ${FOCO}`}>
             Limpiar formulario
           </button>
 
-          <button type="submit" disabled={cargando} className={UI.btnPrimario}>
+          <button type="submit" disabled={cargando} className={`${UI.btnPrimario} ${FOCO}`}>
             {cargando ? 'Guardando...' : 'Guardar evento'}
           </button>
         </div>

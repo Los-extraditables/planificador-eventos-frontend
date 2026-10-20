@@ -33,6 +33,12 @@ const request = async (ruta, { method = 'GET', body } = {}) => {
 };
 
 /* ============================ Utilidades ============================ */
+// Anillo de foco visible y consistente para los controles definidos en este archivo
+const FOCO = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-700 focus-visible:ring-offset-2';
+
+const SELECTOR_FOCO =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 const gestionesDe = (ev) => ev?.gestiones || ev?.gestiones_plan || [];
 const esCompletado = (ev) => String(ev?.estado || '').toLowerCase().startsWith('completad');
 const esPospuesta = (g) =>
@@ -50,11 +56,77 @@ const calcularProgreso = (gestiones = []) => {
   };
 };
 
+/* ===================== Diálogo accesible (foco, Esc, Tab) ===================== */
+// Al abrir: foco en [data-autofocus] (o el primer control). Al cerrar: devuelve el foco a quien lo abrió.
+// Si ese elemento ya no existe (p. ej. se eliminó el evento), el foco pasa al encabezado #foco-fallback.
+const useDialogo = (onCerrar, bloqueado) => {
+  const ref = useRef(null);
+  const cerrarRef = useRef(onCerrar);
+  const bloqueadoRef = useRef(bloqueado);
+  cerrarRef.current = onCerrar;
+  bloqueadoRef.current = bloqueado;
+
+  useEffect(() => {
+    const previo = document.activeElement;
+    const cont = ref.current;
+    const inicial = cont?.querySelector('[data-autofocus]') || cont?.querySelector(SELECTOR_FOCO);
+    inicial?.focus();
+    return () => {
+      if (previo && previo.isConnected && typeof previo.focus === 'function') previo.focus();
+      else document.getElementById('foco-fallback')?.focus();
+    };
+  }, []);
+
+  const onKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      if (!bloqueadoRef.current) cerrarRef.current();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const enfocables = ref.current?.querySelectorAll(SELECTOR_FOCO);
+    if (!enfocables || enfocables.length === 0) return;
+    const primero = enfocables[0];
+    const ultimo = enfocables[enfocables.length - 1];
+    if (e.shiftKey && document.activeElement === primero) {
+      e.preventDefault();
+      ultimo.focus();
+    } else if (!e.shiftKey && document.activeElement === ultimo) {
+      e.preventDefault();
+      primero.focus();
+    }
+  };
+
+  return { ref, onKeyDown };
+};
+
+const Modal = ({ onCerrar, bloqueado = false, labelledBy, describedBy, role = 'dialog', z = 'z-50', className, children }) => {
+  const { ref, onKeyDown } = useDialogo(onCerrar, bloqueado);
+  return (
+    <div
+      className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 ${z}`}
+      onMouseDown={(e) => e.target === e.currentTarget && !bloqueado && onCerrar()}
+    >
+      <div
+        ref={ref}
+        role={role}
+        aria-modal="true"
+        aria-labelledby={labelledBy}
+        aria-describedby={describedBy}
+        onKeyDown={onKeyDown}
+        className={className}
+      >
+        {children}
+      </div>
+    </div>
+  );
+};
+
 /* ===================== Etiqueta de pospuestas (igual que en Hoy y Detalle) ===================== */
 const EtiquetaPospuestas = ({ cantidad, texto }) => {
   if (!cantidad && !texto) return null;
   return (
-    <span className="inline-flex items-center bg-amber-100 text-amber-800 border border-amber-200 text-[10px] leading-4 font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
+    <span className="inline-flex items-center bg-amber-100 text-amber-800 border border-amber-200 text-xs leading-4 font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
       {texto || `${cantidad} ${cantidad === 1 ? 'pospuesta' : 'pospuestas'}`}
     </span>
   );
@@ -94,48 +166,37 @@ const BarraProgreso = ({ completadas, total, pospuestas = 0, titulo, tamano = 'm
 };
 
 /* ===================== Modal de confirmación de eliminación (igual que en Detalle) ===================== */
-const ModalConfirmarEliminar = ({ titulo, descripcion, eliminando, onConfirmar, onCancelar }) => {
-  useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && !eliminando && onCancelar();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [eliminando, onCancelar]);
-
-  return (
-    <div
-      className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[70] p-4"
-      onMouseDown={(e) => e.target === e.currentTarget && !eliminando && onCancelar()}
-    >
-      <div
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="titulo-eliminar"
-        aria-describedby="desc-eliminar"
-        className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl border border-slate-100 text-left"
-      >
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center flex-shrink-0">
-            <AlertTriangle className="w-6 h-6" />
-          </div>
-          <div className="min-w-0">
-            <h3 id="titulo-eliminar" className={UI.modalTitulo}>{titulo}</h3>
-            <p id="desc-eliminar" className={`${UI.modalSubtitulo} leading-relaxed`}>{descripcion}</p>
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-3 pt-6 mt-6 border-t border-slate-100">
-          <button type="button" onClick={onCancelar} disabled={eliminando} autoFocus className={UI.btnSecundario}>
-            Cancelar
-          </button>
-          <button type="button" onClick={onConfirmar} disabled={eliminando} className={UI.btnPeligro}>
-            <Trash2 className="w-4 h-4" />
-            {eliminando ? 'Eliminando...' : 'Eliminar'}
-          </button>
-        </div>
+const ModalConfirmarEliminar = ({ titulo, descripcion, eliminando, onConfirmar, onCancelar }) => (
+  <Modal
+    role="alertdialog"
+    z="z-[70]"
+    bloqueado={eliminando}
+    onCerrar={onCancelar}
+    labelledBy="titulo-eliminar"
+    describedBy="desc-eliminar"
+    className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl border border-slate-100 text-left"
+  >
+    <div className="flex items-start gap-4">
+      <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-700 flex items-center justify-center flex-shrink-0">
+        <AlertTriangle className="w-6 h-6" aria-hidden="true" />
+      </div>
+      <div className="min-w-0">
+        <h2 id="titulo-eliminar" className={UI.modalTitulo}>{titulo}</h2>
+        <p id="desc-eliminar" className={`${UI.modalSubtitulo} leading-relaxed`}>{descripcion}</p>
       </div>
     </div>
-  );
-};
+
+    <div className="flex justify-end gap-3 pt-6 mt-6 border-t border-slate-100">
+      <button type="button" onClick={onCancelar} disabled={eliminando} data-autofocus className={`${UI.btnSecundario} ${FOCO}`}>
+        Cancelar
+      </button>
+      <button type="button" onClick={onConfirmar} disabled={eliminando} className={`${UI.btnPeligro} ${FOCO}`}>
+        <Trash2 className="w-4 h-4" aria-hidden="true" />
+        {eliminando ? 'Eliminando...' : 'Eliminar'}
+      </button>
+    </div>
+  </Modal>
+);
 
 /* ================================ Página ================================ */
 const Progreso = () => {
@@ -237,77 +298,107 @@ const Progreso = () => {
     [eventosFiltrados]
   );
 
+  const listo = !cargando && !error;
+  const cantidadEventos = eventosCalculados.length;
+
   return (
     <div className={UI.pagina}>
-      {mensaje.texto && <Aviso tipo={mensaje.tipo} texto={mensaje.texto} />}
+      {/* Aviso visible (oculto al lector de pantalla para no duplicar) */}
+      {mensaje.texto && (
+        <div aria-hidden="true">
+          <Aviso tipo={mensaje.tipo} texto={mensaje.texto} />
+        </div>
+      )}
+      {/* Regiones en vivo siempre presentes */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {mensaje.tipo !== 'error' ? mensaje.texto : ''}
+      </div>
+      <div role="alert" className="sr-only">
+        {mensaje.tipo === 'error' ? mensaje.texto : ''}
+      </div>
+
+      {/* El encabezado (h1) siempre está presente, también durante la carga y ante un error */}
+      <EncabezadoPagina titulo="Progreso de eventos" subtitulo="Consulta el avance de tus eventos y subtareas.">
+        {listo && (
+          <div className={UI.filtro}>
+            <SlidersHorizontal className="w-4 h-4 text-slate-500 flex-shrink-0" aria-hidden="true" />
+            <select
+              value={filtroEstado}
+              onChange={(e) => setFiltroEstado(e.target.value)}
+              aria-label="Filtrar eventos"
+              className={`${UI.filtroSelect} ${FOCO}`}
+            >
+              <option value="todos">Todos los eventos</option>
+              <option value="en_preparacion">En preparación</option>
+              <option value="completados">Completados</option>
+            </select>
+          </div>
+        )}
+      </EncabezadoPagina>
 
       {cargando && (
-        <PantallaCarga
-          icono={BarChart3}
-          titulo="Calculando progreso"
-          texto="Procesando el avance de tus eventos y subtareas..."
-        />
+        <div role="status" aria-live="polite">
+          <PantallaCarga
+            icono={BarChart3}
+            titulo="Calculando progreso"
+            texto="Procesando el avance de tus eventos y subtareas..."
+          />
+        </div>
       )}
 
       {error && !cargando && (
-        <div className="p-5 text-red-600 bg-red-50/80 rounded-2xl text-sm border border-red-200 flex flex-col items-start gap-3">
+        <div role="alert" className="p-5 text-red-700 bg-red-50/80 rounded-2xl text-sm border border-red-200 flex flex-col items-start gap-3">
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-5 h-5" />
+            <AlertCircle className="w-5 h-5" aria-hidden="true" />
             <span className="font-bold">{error}</span>
           </div>
-          <button onClick={obtenerDatos} className={UI.btnPrimario}>
+          <button type="button" onClick={obtenerDatos} className={`${UI.btnPrimario} ${FOCO}`}>
             Reintentar
           </button>
         </div>
       )}
 
-      {!cargando && !error && (
+      {listo && (
         <>
-          <EncabezadoPagina titulo="Progreso de eventos" subtitulo="Consulta el avance de tus eventos y subtareas.">
-            <div className={UI.filtro}>
-              <SlidersHorizontal className="w-4 h-4 text-slate-400 flex-shrink-0" />
-              <select
-                value={filtroEstado}
-                onChange={(e) => setFiltroEstado(e.target.value)}
-                aria-label="Filtrar eventos"
-                className={UI.filtroSelect}
-              >
-                <option value="todos">Todos los eventos</option>
-                <option value="en_preparacion">En preparación</option>
-                <option value="completados">Completados</option>
-              </select>
-            </div>
-          </EncabezadoPagina>
+          {/* Anuncia cuántos eventos quedan al cambiar el filtro */}
+          <p role="status" aria-live="polite" className="sr-only">
+            Mostrando {cantidadEventos} {cantidadEventos === 1 ? 'evento' : 'eventos'}
+          </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className={`${UI.tarjeta} flex flex-col justify-between space-y-4`}>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#00B4D8] text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-                  <BarChart3 className="w-5 h-5" />
+                <div className="w-10 h-10 rounded-xl bg-cyan-700 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
+                  <BarChart3 className="w-5 h-5" aria-hidden="true" />
                 </div>
-                <span className="text-xs font-semibold text-slate-500">Eventos mostrados</span>
+                <span className="text-xs font-semibold text-slate-600">Eventos mostrados</span>
               </div>
-              <div className="text-3xl font-extrabold text-slate-900 tracking-tight">{eventosCalculados.length}</div>
+              <div className="text-3xl font-extrabold text-slate-900 tracking-tight">{cantidadEventos}</div>
             </div>
 
             <div className={`${UI.tarjeta} flex flex-col justify-between space-y-4`}>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#10B981] text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-                  <CheckCircle2 className="w-5 h-5" />
+                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
+                  <CheckCircle2 className="w-5 h-5" aria-hidden="true" />
                 </div>
-                <span className="text-xs font-semibold text-slate-500">Subtareas completadas</span>
+                <span className="text-xs font-semibold text-slate-600">Subtareas completadas</span>
               </div>
               <div className="text-3xl font-extrabold text-slate-900 tracking-tight">
-                {global.completadas} <span className="text-xl text-slate-400 font-medium">/ {global.total}</span>
+                {global.completadas}{' '}
+                <span className="text-xl text-slate-600 font-medium">
+                  <span className="sr-only">de </span>
+                  <span aria-hidden="true">/ </span>
+                  {global.total}
+                </span>
               </div>
             </div>
 
             <div className={`${UI.tarjeta} flex flex-col justify-between space-y-4`}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-[#7E22CE] text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-                  <TrendingUp className="w-5 h-5" />
+                  <TrendingUp className="w-5 h-5" aria-hidden="true" />
                 </div>
-                <span className="text-xs font-semibold text-slate-500">Cumplimiento global</span>
+                <span className="text-xs font-semibold text-slate-600">Cumplimiento global</span>
               </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
@@ -319,46 +410,48 @@ const Progreso = () => {
             </div>
           </div>
 
-          <div className="flex flex-col gap-4 pt-2">
-            <h2 className={UI.h2}>Detalle por evento</h2>
+          <section aria-labelledby="foco-fallback" className="flex flex-col gap-4 pt-2">
+            <h2 id="foco-fallback" tabIndex={-1} className={`${UI.h2} focus:outline-none`}>Detalle por evento</h2>
 
-            {eventosCalculados.length === 0 ? (
-              <div className={`${UI.tarjeta} p-8 text-center text-slate-400 text-sm`}>
+            {cantidadEventos === 0 ? (
+              <div className={`${UI.tarjeta} p-8 text-center text-slate-600 text-sm`}>
                 No hay eventos registrados que coincidan con este filtro.
               </div>
             ) : (
-              <div className="flex flex-col gap-4">
+              <ul className="flex flex-col gap-4">
                 {eventosCalculados.map((evento) => (
-                  <div key={evento.id} className={`${UI.tarjeta} flex flex-col gap-4 hover:shadow-md transition-all`}>
+                  <li key={evento.id} className={`${UI.tarjeta} flex flex-col gap-4 hover:shadow-md transition-all`}>
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="flex flex-col gap-1.5 min-w-0">
                         <div className="flex items-center gap-2.5 flex-wrap">
                           <h3 className="text-base font-extrabold text-slate-900">{evento.nombre}</h3>
-                          <span className="inline-flex items-center px-2 py-0.5 bg-[#F3E8FF] text-[#7E22CE] border border-[#E9D5FF] rounded-full text-[10px] leading-4 font-bold whitespace-nowrap">
+                          <span className="inline-flex items-center px-2 py-0.5 bg-[#F3E8FF] text-[#7E22CE] border border-[#E9D5FF] rounded-full text-xs leading-4 font-bold whitespace-nowrap">
+                            <span className="sr-only">Estado: </span>
                             {evento.estado || 'En preparación'}
                           </span>
                           <EtiquetaPospuestas cantidad={evento.progreso.pospuestas} />
                         </div>
-                        <p className="text-xs text-slate-500 font-medium">{evento.categoria || evento.tipo || 'Social'}</p>
+                        <p className="text-xs text-slate-600 font-medium">{evento.categoria || evento.tipo || 'Social'}</p>
                       </div>
 
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
                           onClick={() => navigate(`/detalle-evento/${evento.id}`)}
-                          className="inline-flex items-center gap-1 text-xs font-bold text-[#7E22CE] bg-purple-50 hover:bg-[#7E22CE] hover:text-white px-3.5 py-2 rounded-xl transition whitespace-nowrap cursor-pointer"
+                          aria-label={`Ver detalle de ${evento.nombre}`}
+                          className={`inline-flex items-center gap-1 text-xs font-bold text-[#7E22CE] bg-purple-50 hover:bg-[#7E22CE] hover:text-white px-3.5 py-2 rounded-xl transition whitespace-nowrap cursor-pointer ${FOCO}`}
                         >
                           <span>Ver detalle</span>
-                          <ChevronRight className="w-3.5 h-3.5" />
+                          <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
                         </button>
                         <button
                           type="button"
                           onClick={() => setEventoAEliminar(evento)}
-                          className="p-2 text-slate-400 hover:text-red-600 transition cursor-pointer rounded-lg hover:bg-red-50"
-                          title="Eliminar evento"
+                          className={`p-2 text-slate-600 hover:text-red-700 transition cursor-pointer rounded-lg hover:bg-red-50 ${FOCO}`}
                           aria-label={`Eliminar ${evento.nombre}`}
+                          aria-haspopup="dialog"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-4 h-4" aria-hidden="true" />
                         </button>
                       </div>
                     </div>
@@ -369,11 +462,11 @@ const Progreso = () => {
                       titulo={`Progreso de ${evento.nombre}`}
                       ocultarTitulo
                     />
-                  </div>
+                  </li>
                 ))}
-              </div>
+              </ul>
             )}
-          </div>
+          </section>
         </>
       )}
 
