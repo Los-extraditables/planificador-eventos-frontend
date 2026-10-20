@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 // Clases compartidas: el espaciado se cambia aquí y afecta a todos los campos por igual
-const ETIQUETA = 'block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider';
+const ETIQUETA = 'block text-xs font-bold text-slate-700 uppercase tracking-wider';
 const ICONO = 'absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-slate-400';
 const CAMPO =
   'w-full pl-11 pr-4 py-3.5 bg-[#F8FAFC] border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#7E22CE] focus:border-transparent transition';
@@ -62,9 +62,9 @@ export const RegisterPage = () => {
   };
 
   return (
-    <div className="text-left w-full max-w-md mx-auto font-sans">
-      <div className="mb-8">
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mb-2">
+    <div className="text-left w-full max-w-md mx-auto font-sans flex flex-col gap-6">
+      <div className="flex flex-col gap-2 pb-2">
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
           Crear cuenta
         </h1>
         <p className="text-xs sm:text-sm text-slate-500">
@@ -73,22 +73,22 @@ export const RegisterPage = () => {
       </div>
 
       {error && (
-        <div className="bg-red-50 text-red-700 text-xs font-semibold p-4 rounded-2xl mb-6 border border-red-200 flex items-center gap-2.5 shadow-sm">
+        <div className="bg-red-50 text-red-700 text-xs font-semibold p-4 rounded-2xl border border-red-200 flex items-center gap-2.5 shadow-sm">
           <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
       {mensajeExito && (
-        <div className="bg-emerald-50 text-emerald-700 text-xs font-semibold p-4 rounded-2xl mb-6 border border-emerald-200 flex items-center gap-2.5 shadow-sm">
+        <div className="bg-emerald-50 text-emerald-700 text-xs font-semibold p-4 rounded-2xl border border-emerald-200 flex items-center gap-2.5 shadow-sm">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
           <span>{mensajeExito}</span>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         {/* NOMBRE COMPLETO */}
-        <div>
+        <div className="flex flex-col gap-2">
           <label className={ETIQUETA}>
             Nombre completo <span className="text-red-500">*</span>
           </label>
@@ -108,7 +108,7 @@ export const RegisterPage = () => {
         </div>
 
         {/* CORREO ELECTRÓNICO */}
-        <div>
+        <div className="flex flex-col gap-2">
           <label className={ETIQUETA}>
             Correo electrónico <span className="text-red-500">*</span>
           </label>
@@ -128,7 +128,7 @@ export const RegisterPage = () => {
         </div>
 
         {/* CONTRASEÑA */}
-        <div>
+        <div className="flex flex-col gap-2">
           <label className={ETIQUETA}>
             Contraseña <span className="text-red-500">*</span>
           </label>
@@ -156,7 +156,7 @@ export const RegisterPage = () => {
         </div>
 
         {/* CONFIRMAR CONTRASEÑA */}
-        <div>
+        <div className="flex flex-col gap-2">
           <label className={ETIQUETA}>
             Confirmar contraseña <span className="text-red-500">*</span>
           </label>
@@ -187,13 +187,13 @@ export const RegisterPage = () => {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-[#7E22CE] hover:bg-[#6B21A8] text-white font-bold py-3.5 rounded-xl text-xs sm:text-sm transition-all shadow-sm cursor-pointer disabled:opacity-50 mt-3"
+          className="w-full bg-[#7E22CE] hover:bg-[#6B21A8] text-white font-bold py-3.5 rounded-xl text-xs sm:text-sm transition-all shadow-sm cursor-pointer disabled:opacity-50 "
         >
           {loading ? 'Creando cuenta...' : 'Crear Cuenta'}
         </button>
       </form>
 
-      <p className="text-xs text-center text-slate-500 mt-8 font-medium">
+      <p className="text-xs text-center text-slate-500 pt-2 font-medium">
         ¿Ya tienes cuenta?{' '}
         <Link to="/login" className="text-[#7E22CE] font-bold hover:underline">
           Inicia sesión
