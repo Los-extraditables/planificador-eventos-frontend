@@ -12,6 +12,7 @@ import {
   X
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import CargaGestionWidget from '../components/cargaGestionWidget';
 import { Aviso, EncabezadoPagina, PantallaCarga, UI, formatearFechaDisplay, limpiarFecha } from '../components/ui';
@@ -51,6 +52,9 @@ const TACTIL = 'min-h-[44px] md:min-h-0';
 
 // Los campos de formulario usan 16px en móvil para que iOS no haga zoom automático al enfocarlos
 const CAMPO_MOVIL = '!text-base sm:!text-sm';
+
+// Estilo del diálogo definido aquí (no depende de UI.modal): padding y ancho adaptados a cada pantalla
+const CLASE_MODAL = 'bg-white rounded-3xl p-5 sm:p-8 w-full max-w-lg shadow-2xl border border-slate-100 text-left';
 
 const SELECTOR_FOCO =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -245,24 +249,26 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
         )}
       </div>
 
-      {abierto && (
-        <div
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto"
-          style={{
-            paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
-            paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))'
-          }}
-          onMouseDown={(e) => e.target === e.currentTarget && cerrar()}
-        >
-          <div
-            ref={dialogoRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="titulo-posponer"
-            aria-describedby="descripcion-posponer"
-            onKeyDown={onKeyDownDialogo}
-            className={`${UI.modal} w-full max-h-[calc(100dvh-1.5rem)] overflow-y-auto`}
-          >
+      {abierto &&
+        createPortal(
+          <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm overflow-y-auto overscroll-contain">
+            <div
+              className="flex min-h-full items-center justify-center p-3 sm:p-4"
+              style={{
+                paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
+                paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))'
+              }}
+              onMouseDown={(e) => e.target === e.currentTarget && cerrar()}
+            >
+              <div
+                ref={dialogoRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="titulo-posponer"
+                aria-describedby="descripcion-posponer"
+                onKeyDown={onKeyDownDialogo}
+                className={CLASE_MODAL}
+              >
             <div className="flex items-start justify-between gap-3 sm:gap-4">
               <div className="flex items-start gap-3 sm:gap-4 min-w-0">
                 <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center flex-shrink-0">
@@ -352,9 +358,11 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </>
   );
 };

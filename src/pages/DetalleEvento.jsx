@@ -15,6 +15,7 @@ import {
   X
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Aviso, EncabezadoPagina, PantallaCarga, UI, formatearFechaDisplay, limpiarFecha } from '../components/ui';
 import { authService } from '../services/authService';
@@ -60,6 +61,9 @@ const TACTIL = 'min-h-[44px] md:min-h-0';
 
 // Campos: 16px en móvil (evita el zoom automático de iOS) y sin desbordar su contenedor
 const CAMPO = 'w-full min-w-0 !text-base sm:!text-sm';
+
+// Estilo del diálogo definido aquí (no depende de UI.modal): padding y ancho adaptados a cada pantalla
+const CLASE_MODAL = 'bg-white rounded-3xl p-5 sm:p-8 w-full max-w-lg shadow-2xl border border-slate-100 text-left';
 
 // Pie de los diálogos: botones apilados a ancho completo en móvil (acción principal arriba), en fila desde sm
 const PIE_DIALOGO = 'flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 pt-5 border-t border-slate-100';
@@ -187,28 +191,32 @@ const useDialogo = (onCerrar, bloqueado) => {
 
 const Modal = ({ onCerrar, bloqueado = false, labelledBy, describedBy, role = 'dialog', z = 'z-50', className, children }) => {
   const { ref, onKeyDown } = useDialogo(onCerrar, bloqueado);
-  return (
-    <div
-      className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 ${z}`}
-      style={{
-        paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
-        paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))'
-      }}
-      onMouseDown={(e) => e.target === e.currentTarget && !bloqueado && onCerrar()}
-    >
-      {/* Altura máxima = pantalla; si el contenido es más alto (teclado abierto, pantallas bajas) el diálogo hace scroll por dentro */}
+  // Se monta en <body>: así ningún contenedor padre (overflow, transform, z-index) lo recorta ni lo tapa.
+  // La capa exterior hace scroll si el diálogo es más alto que la pantalla (teclado abierto, pantallas bajas).
+  return createPortal(
+    <div className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm overflow-y-auto overscroll-contain ${z}`}>
       <div
-        ref={ref}
-        role={role}
-        aria-modal="true"
-        aria-labelledby={labelledBy}
-        aria-describedby={describedBy}
-        onKeyDown={onKeyDown}
-        className={`${className} w-full max-h-full overflow-y-auto`}
+        className="flex min-h-full items-center justify-center p-3 sm:p-4"
+        style={{
+          paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
+          paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))'
+        }}
+        onMouseDown={(e) => e.target === e.currentTarget && !bloqueado && onCerrar()}
       >
-        {children}
+        <div
+          ref={ref}
+          role={role}
+          aria-modal="true"
+          aria-labelledby={labelledBy}
+          aria-describedby={describedBy}
+          onKeyDown={onKeyDown}
+          className={className}
+        >
+          {children}
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -345,7 +353,7 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
       </div>
 
       {abierto && (
-        <Modal onCerrar={cerrar} labelledBy="titulo-posponer" describedBy="descripcion-posponer" className={UI.modal}>
+        <Modal onCerrar={cerrar} labelledBy="titulo-posponer" describedBy="descripcion-posponer" className={CLASE_MODAL}>
           <div className="flex items-start justify-between gap-3 sm:gap-4">
             <div className="flex items-start gap-3 sm:gap-4 min-w-0">
               <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center flex-shrink-0">
@@ -443,7 +451,7 @@ const ModalConfirmarEliminar = ({ titulo, descripcion, eliminando, onConfirmar, 
     onCerrar={onCancelar}
     labelledBy="titulo-eliminar"
     describedBy="desc-eliminar"
-    className="bg-white rounded-3xl p-5 sm:p-8 max-w-md shadow-2xl border border-slate-100 text-left"
+    className="bg-white rounded-3xl p-5 sm:p-8 w-full max-w-md shadow-2xl border border-slate-100 text-left"
   >
     <div className="flex items-start gap-3 sm:gap-4">
       <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-red-50 text-red-700 flex items-center justify-center flex-shrink-0">
@@ -1065,7 +1073,7 @@ const DetalleEvento = () => {
 
       {/* MODAL: EDITAR EVENTO */}
       {modalEvento && (
-        <Modal onCerrar={() => setModalEvento(false)} labelledBy="titulo-editar-evento" describedBy="desc-editar-evento" className={UI.modal}>
+        <Modal onCerrar={() => setModalEvento(false)} labelledBy="titulo-editar-evento" describedBy="desc-editar-evento" className={CLASE_MODAL}>
           <div className="flex items-start justify-between gap-3 sm:gap-4">
             <div className="min-w-0">
               <h2 id="titulo-editar-evento" className={UI.modalTitulo}>Editar evento</h2>
@@ -1180,7 +1188,7 @@ const DetalleEvento = () => {
 
       {/* MODAL: CREAR / EDITAR SUBTAREA */}
       {modalGestion.abierto && (
-        <Modal onCerrar={() => setModalGestion(MODAL_GESTION_CERRADO)} labelledBy="titulo-gestion" describedBy="desc-gestion" className={UI.modal}>
+        <Modal onCerrar={() => setModalGestion(MODAL_GESTION_CERRADO)} labelledBy="titulo-gestion" describedBy="desc-gestion" className={CLASE_MODAL}>
           <div className="flex items-start justify-between gap-3 sm:gap-4">
             <div className="min-w-0">
               <h2 id="titulo-gestion" className={UI.modalTitulo}>{modalGestion.modo === 'crear' ? 'Agregar subtarea' : 'Editar subtarea'}</h2>

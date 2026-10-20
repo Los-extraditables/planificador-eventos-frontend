@@ -1,5 +1,6 @@
 import { CalendarPlus, ChevronDown, ChevronUp, FileText, Gauge, LayoutGrid, LogOut, Menu, Minus, Plus, TrendingUp, User, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { NavLink, useNavigate } from 'react-router-dom';
 import logoEvora from '../assets/logoEvora.svg';
 import { useAuth } from '../context/AuthContext';
@@ -341,15 +342,17 @@ const Navbar = () => {
       </header>
 
       {/* Modal Logout */}
-      {mostrarModalLogout && (
-        <div
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto"
-          style={{
-            paddingTop: 'max(1rem, env(safe-area-inset-top))',
-            paddingBottom: 'max(1rem, env(safe-area-inset-bottom))'
-          }}
-          onMouseDown={(e) => e.target === e.currentTarget && setMostrarModalLogout(false)}
-        >
+      {mostrarModalLogout &&
+        createPortal(
+          <div className="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-xs overflow-y-auto overscroll-contain">
+            <div
+              className="flex min-h-full items-center justify-center p-4"
+              style={{
+                paddingTop: 'max(1rem, env(safe-area-inset-top))',
+                paddingBottom: 'max(1rem, env(safe-area-inset-bottom))'
+              }}
+              onMouseDown={(e) => e.target === e.currentTarget && setMostrarModalLogout(false)}
+            >
           <div
             ref={dialogoRef}
             role="alertdialog"
@@ -381,8 +384,10 @@ const Navbar = () => {
               </button>
             </div>
           </div>
-        </div>
-      )}
+            </div>
+          </div>,
+          document.body
+        )}
     </>
   );
 };
