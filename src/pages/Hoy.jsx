@@ -46,6 +46,12 @@ const FECHA_MAX = '9999-12-31';
 // Anillo de foco visible y consistente para los controles definidos en este archivo
 const FOCO = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-700 focus-visible:ring-offset-2';
 
+// Áreas táctiles de 44px en móvil/tablet (WCAG 2.5.5); en escritorio se mantiene el tamaño original
+const TACTIL = 'min-h-[44px] md:min-h-0';
+
+// Los campos de formulario usan 16px en móvil para que iOS no haga zoom automático al enfocarlos
+const CAMPO_MOVIL = '!text-base sm:!text-sm';
+
 const SELECTOR_FOCO =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -143,6 +149,16 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
     if (abierto) inputFechaRef.current?.focus();
   }, [abierto]);
 
+  // Evita que la página de fondo se desplace mientras el diálogo está abierto (importante en móvil)
+  useEffect(() => {
+    if (!abierto) return undefined;
+    const previo = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previo;
+    };
+  }, [abierto]);
+
   // Escape cierra; Tab / Shift+Tab quedan atrapados dentro del diálogo
   const onKeyDownDialogo = (e) => {
     if (e.key === 'Escape') {
@@ -197,13 +213,14 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
 
   return (
     <>
-      <div className="flex items-center gap-2 flex-shrink-0">
+      {/* En móvil/tablet los botones ocupan todo el ancho de la tarjeta; desde md quedan a la derecha */}
+      <div className="flex items-stretch md:items-center gap-2 w-full md:w-auto flex-shrink-0">
         <button
           type="button"
           onClick={() => ejecutar(completada ? 'pendiente' : 'hecho')}
           disabled={guardando}
           aria-label={completada ? `Completada. Marcar como pendiente: ${gestion.descripcion}` : `Marcar como hecha: ${gestion.descripcion}`}
-          className={`${UI.btnHecha} ${completada ? UI.btnHechaListo : UI.btnHechaPendiente} ${FOCO}`}
+          className={`${UI.btnHecha} ${completada ? UI.btnHechaListo : UI.btnHechaPendiente} ${FOCO} ${TACTIL} flex-1 md:flex-none justify-center`}
         >
           <Check className="w-3.5 h-3.5" aria-hidden="true" />
           <span>{completada ? 'Completada' : 'Hecha'}</span>
@@ -221,7 +238,7 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
             disabled={guardando}
             aria-label={`Posponer: ${gestion.descripcion}`}
             aria-haspopup="dialog"
-            className={`${UI.btnPosponer} ${FOCO}`}
+            className={`${UI.btnPosponer} ${FOCO} ${TACTIL} flex-1 md:flex-none justify-center`}
           >
             Posponer
           </button>
@@ -230,7 +247,11 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
 
       {abierto && (
         <div
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto"
+          style={{
+            paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
+            paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))'
+          }}
           onMouseDown={(e) => e.target === e.currentTarget && cerrar()}
         >
           <div
@@ -240,12 +261,12 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
             aria-labelledby="titulo-posponer"
             aria-describedby="descripcion-posponer"
             onKeyDown={onKeyDownDialogo}
-            className={UI.modal}
+            className={`${UI.modal} w-full max-h-[calc(100dvh-1.5rem)] overflow-y-auto`}
           >
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-4 min-w-0">
-                <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center flex-shrink-0">
-                  <CalendarClock className="w-6 h-6" aria-hidden="true" />
+            <div className="flex items-start justify-between gap-3 sm:gap-4">
+              <div className="flex items-start gap-3 sm:gap-4 min-w-0">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center flex-shrink-0">
+                  <CalendarClock className="w-5 h-5 sm:w-6 sm:h-6" aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
                   <h2 id="titulo-posponer" className={UI.modalTitulo}>Posponer subtarea</h2>
@@ -255,14 +276,14 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
               <button
                 type="button"
                 onClick={cerrar}
-                className={`p-1 rounded text-slate-600 hover:text-slate-800 transition cursor-pointer ${FOCO}`}
+                className={`p-2 -m-1 sm:p-1 sm:m-0 rounded text-slate-600 hover:text-slate-800 transition cursor-pointer flex-shrink-0 ${FOCO}`}
                 aria-label="Cerrar diálogo"
               >
                 <X className="w-5 h-5" aria-hidden="true" />
               </button>
             </div>
 
-            <form onSubmit={confirmarPosponer} noValidate className="mt-6 space-y-5">
+            <form onSubmit={confirmarPosponer} noValidate className="mt-5 sm:mt-6 space-y-4 sm:space-y-5">
               <div>
                 <label htmlFor="posponer-fecha" className={UI.label}>
                   Nueva fecha <span className="text-red-700" aria-hidden="true">*</span>
@@ -284,11 +305,11 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
                       setForm({ ...form, fecha: e.target.value });
                       setErrorFecha('');
                     }}
-                    className={`${errorFecha ? UI.inputError : UI.input} pl-11 ${FOCO}`}
+                    className={`${errorFecha ? UI.inputError : UI.input} pl-11 w-full min-w-0 ${CAMPO_MOVIL} ${FOCO}`}
                   />
                 </div>
                 {errorFecha && (
-                  <p id="posponer-fecha-error" role="alert" className={UI.error}>
+                  <p id="posponer-fecha-error" role="alert" className={`${UI.error} break-words`}>
                     {errorFecha}
                   </p>
                 )}
@@ -296,7 +317,7 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
                   <p id="posponer-fecha-ayuda" className="text-xs text-slate-600 mt-1.5">Puedes elegir hasta la fecha límite del evento.</p>
                 )}
                 {sinMargen && !errorFecha && (
-                  <p id="posponer-fecha-sin-margen" className="text-xs text-amber-800 mt-1.5">
+                  <p id="posponer-fecha-sin-margen" className="text-xs text-amber-800 mt-1.5 break-words">
                     No es posible posponer: el evento ya no tiene fechas disponibles ({formatearFechaDisplay(maxFecha)}).
                   </p>
                 )}
@@ -314,18 +335,19 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
                   value={form.nota}
                   onChange={(e) => setForm({ ...form, nota: e.target.value })}
                   aria-describedby="posponer-nota-contador"
-                  className={`${UI.input} resize-none ${FOCO}`}
+                  className={`${UI.input} resize-none w-full min-w-0 ${CAMPO_MOVIL} ${FOCO}`}
                 />
                 <p id="posponer-nota-contador" className="text-xs text-slate-600 mt-1 text-right">
                   {form.nota.length}/300<span className="sr-only"> caracteres</span>
                 </p>
               </div>
 
-              <div className="flex justify-end gap-3 pt-5 border-t border-slate-100">
-                <button type="button" onClick={cerrar} className={`${UI.btnSecundario} ${FOCO}`}>
+              {/* En móvil los botones se apilan a ancho completo (acción principal arriba); desde sm van en fila a la derecha */}
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 pt-4 sm:pt-5 border-t border-slate-100">
+                <button type="button" onClick={cerrar} className={`${UI.btnSecundario} ${FOCO} w-full sm:w-auto justify-center min-h-[44px] sm:min-h-0`}>
                   Cancelar
                 </button>
-                <button type="submit" className={`${UI.btnPrimario} ${FOCO}`}>
+                <button type="submit" className={`${UI.btnPrimario} ${FOCO} w-full sm:w-auto justify-center min-h-[44px] sm:min-h-0`}>
                   Posponer
                 </button>
               </div>
@@ -397,13 +419,13 @@ const SeccionGestiones = ({ tipo, gestiones, prioridadPorId, onRegistrar }) => {
   const idTitulo = `seccion-${tipo}-titulo`;
 
   return (
-    <section aria-labelledby={idTitulo} className={`border rounded-2xl p-5 space-y-4 ${cfg.contenedor}`}>
+    <section aria-labelledby={idTitulo} className={`border rounded-2xl p-3 sm:p-5 space-y-3 sm:space-y-4 min-w-0 ${cfg.contenedor}`}>
       <div className="flex items-center gap-3">
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${cfg.iconoBox}`}>
+        <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${cfg.iconoBox}`}>
           <Icono className="w-5 h-5" aria-hidden="true" />
         </div>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
             <h3 id={idTitulo} className="font-extrabold text-slate-900 text-sm">{cfg.titulo}</h3>
             <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${cfg.badge}`}>
               {gestiones.length}
@@ -424,15 +446,16 @@ const SeccionGestiones = ({ tipo, gestiones, prioridadPorId, onRegistrar }) => {
 };
 
 // Mismo diseño que las tarjetas de métricas de Progreso
+// En móvil: fila compacta (icono + etiqueta a la izquierda, valor a la derecha). Desde sm: tarjeta vertical.
 const Metrica = ({ icono: Icono, fondo, valor, etiqueta }) => (
-  <div className={`${UI.tarjeta} flex flex-col justify-between space-y-4`}>
-    <div className="flex items-center gap-3">
+  <div className={`${UI.tarjeta} flex flex-row sm:flex-col items-center sm:items-stretch justify-between gap-3 sm:gap-0 sm:space-y-4 min-w-0`}>
+    <div className="flex items-center gap-3 min-w-0">
       <div className={`w-10 h-10 rounded-xl text-white flex items-center justify-center flex-shrink-0 shadow-sm ${fondo}`}>
         <Icono className="w-5 h-5" aria-hidden="true" />
       </div>
       <span className="text-xs font-semibold text-slate-600">{etiqueta}</span>
     </div>
-    <div className="text-3xl font-extrabold text-slate-900 tracking-tight">{valor}</div>
+    <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight flex-shrink-0">{valor}</div>
   </div>
 );
 
@@ -442,7 +465,9 @@ const TarjetaGestion = ({ gestion, cfg, prioridad, onRegistrar }) => {
   const mostrarNota = pospuesta && gestion.nota_pospuesto && gestion.nota_pospuesto !== NOTA_POR_DEFECTO;
 
   return (
-    <li className={`bg-white border rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition border-l-4 ${cfg.borde} border-slate-200 hover:shadow-md`}>
+    <li
+      className={`bg-white border rounded-2xl p-3 sm:p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4 transition border-l-4 min-w-0 ${cfg.borde} border-slate-200 hover:shadow-md`}
+    >
       <div className="space-y-1.5 flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           {!gestion.completada && prioridad && (
@@ -456,10 +481,10 @@ const TarjetaGestion = ({ gestion, cfg, prioridad, onRegistrar }) => {
             </span>
           )}
 
-          <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 text-xs font-semibold px-2.5 py-0.5 rounded-md">
-            <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
+          <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 text-xs font-semibold px-2.5 py-0.5 rounded-md max-w-full min-w-0">
+            <Calendar className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
             <span className="sr-only">Evento: </span>
-            {gestion.eventoNombre}
+            <span className="truncate">{gestion.eventoNombre}</span>
           </span>
 
           {pospuesta && <EtiquetaPospuestas texto="Pospuesta" />}
@@ -471,19 +496,19 @@ const TarjetaGestion = ({ gestion, cfg, prioridad, onRegistrar }) => {
           )}
         </div>
 
-        <h4 className={`text-sm font-semibold transition ${gestion.completada ? 'line-through text-slate-500' : 'text-slate-900'}`}>
+        <h4 className={`text-sm font-semibold transition break-words ${gestion.completada ? 'line-through text-slate-500' : 'text-slate-900'}`}>
           {gestion.descripcion}
         </h4>
 
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 text-xs text-slate-600">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-600">
           {fechaValor && (
             <span className="flex items-center gap-1 text-slate-600 font-medium">
-              <CalendarClock className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" /> Fecha límite: {formatearFechaDisplay(fechaValor)}
+              <CalendarClock className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" aria-hidden="true" /> Fecha límite: {formatearFechaDisplay(fechaValor)}
             </span>
           )}
           {gestion.horas_estimadas !== undefined && gestion.horas_estimadas !== null && (
             <span className="flex items-center gap-1 font-medium">
-              <Clock className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" /> {gestion.horas_estimadas} h
+              <Clock className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" aria-hidden="true" /> {gestion.horas_estimadas} h
               <span className="sr-only"> estimadas</span>
             </span>
           )}
@@ -493,7 +518,7 @@ const TarjetaGestion = ({ gestion, cfg, prioridad, onRegistrar }) => {
         </div>
 
         {mostrarNota && (
-          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5 w-fit max-w-full">
+          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5 w-fit max-w-full break-words">
             <span className="font-semibold">Nota:</span> {gestion.nota_pospuesto}
           </p>
         )}
@@ -700,10 +725,10 @@ const Hoy = ({ onCrearEvento, setPestanaActiva }) => {
   const primeraCarga = cargando && !cargado;
 
   return (
-    <div className={UI.pagina}>
+    <div className={`${UI.pagina} min-w-0 max-w-full overflow-x-hidden`}>
       {/* Avisos visibles (ocultos al lector de pantalla para no duplicar) */}
       {mensaje.texto && (
-        <div aria-hidden="true">
+        <div aria-hidden="true" className="break-words">
           <Aviso tipo={mensaje.tipo} texto={mensaje.texto} />
         </div>
       )}
@@ -716,18 +741,21 @@ const Hoy = ({ onCrearEvento, setPestanaActiva }) => {
       </div>
 
       <EncabezadoPagina titulo="Hoy" subtitulo={fechaHoyTexto}>
-        <div className={UI.filtro}>
-          <SlidersHorizontal className="w-4 h-4 text-slate-500 flex-shrink-0" aria-hidden="true" />
-          <select
-            value={filtroEstado}
-            onChange={(e) => setFiltroEstado(e.target.value)}
-            aria-label="Filtrar eventos"
-            className={`${UI.filtroSelect} ${FOCO}`}
-          >
-            <option value="todos">Todos los eventos</option>
-            <option value="en_preparacion">En preparación</option>
-            <option value="completados">Completados</option>
-          </select>
+        {/* El filtro ocupa todo el ancho en móvil y se ajusta al contenido desde sm */}
+        <div className="w-full sm:w-auto">
+          <div className={`${UI.filtro} w-full sm:w-auto`}>
+            <SlidersHorizontal className="w-4 h-4 text-slate-500 flex-shrink-0" aria-hidden="true" />
+            <select
+              value={filtroEstado}
+              onChange={(e) => setFiltroEstado(e.target.value)}
+              aria-label="Filtrar eventos"
+              className={`${UI.filtroSelect} ${FOCO} w-full min-w-0 ${CAMPO_MOVIL} ${TACTIL}`}
+            >
+              <option value="todos">Todos los eventos</option>
+              <option value="en_preparacion">En preparación</option>
+              <option value="completados">Completados</option>
+            </select>
+          </div>
         </div>
       </EncabezadoPagina>
 
@@ -742,13 +770,13 @@ const Hoy = ({ onCrearEvento, setPestanaActiva }) => {
       )}
 
       {error && !primeraCarga && !cargado && (
-        <div role="alert" className="flex flex-col items-center justify-center text-center py-16 px-4">
-          <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mb-6 text-red-600">
-            <WifiOff className="h-8 w-8" aria-hidden="true" />
+        <div role="alert" className="flex flex-col items-center justify-center text-center py-10 sm:py-16 px-4">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 bg-red-50 rounded-2xl flex items-center justify-center mb-5 sm:mb-6 text-red-600">
+            <WifiOff className="h-7 w-7 sm:h-8 sm:w-8" aria-hidden="true" />
           </div>
           <h2 className={`${UI.cargandoTitulo} mb-2`}>No pudimos cargar tus actividades</h2>
           <p className="text-sm text-slate-600 max-w-md mb-6 leading-relaxed">Parece que perdimos la conexión. Compruébala e inténtalo de nuevo.</p>
-          <button type="button" onClick={() => cargar()} className={`${UI.btnPrimario} ${FOCO}`}>
+          <button type="button" onClick={() => cargar()} className={`${UI.btnPrimario} ${FOCO} w-full sm:w-auto justify-center ${TACTIL}`}>
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
             Volver a intentar
           </button>
@@ -757,21 +785,21 @@ const Hoy = ({ onCrearEvento, setPestanaActiva }) => {
 
       {cargado &&
         (eventos.length === 0 ? (
-          <div className={`${UI.tarjeta} p-12 text-center flex flex-col items-center justify-center space-y-4 my-12`}>
-            <div className="w-16 h-16 rounded-2xl bg-[#F3E5F5] flex items-center justify-center text-[#7B1FA2]">
-              <Calendar className="w-8 h-8" aria-hidden="true" />
+          <div className={`${UI.tarjeta} p-6 sm:p-12 text-center flex flex-col items-center justify-center space-y-4 my-6 sm:my-12`}>
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-[#F3E5F5] flex items-center justify-center text-[#7B1FA2]">
+              <Calendar className="w-7 h-7 sm:w-8 sm:h-8" aria-hidden="true" />
             </div>
             <div className="space-y-1">
               <h2 className={UI.cargandoTitulo}>¡Todo listo por hoy!</h2>
               <p className="text-sm text-slate-600">No tienes subtareas urgentes hoy.</p>
             </div>
-            <button type="button" onClick={handleIrACrear} className={`${UI.btnPrimario} ${FOCO} mt-2`}>
+            <button type="button" onClick={handleIrACrear} className={`${UI.btnPrimario} ${FOCO} mt-2 w-full sm:w-auto justify-center ${TACTIL}`}>
               <span aria-hidden="true">+</span> Crear un evento
             </button>
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
               <Metrica icono={Calendar} fondo="bg-cyan-700" valor={gestionesHoy.length} etiqueta="Subtareas para hoy" />
               <Metrica
                 icono={ClipboardList}
@@ -783,30 +811,32 @@ const Hoy = ({ onCrearEvento, setPestanaActiva }) => {
             </div>
 
             {/* Se recalcula al instante con cada cambio */}
-            <CargaGestionWidget
-              horasTotalesHoy={horasTotalesHoy}
-              limiteDiarioMax={limiteDiarioMax}
-              alertaIgnorada={alertaIgnorada}
-              porcentajeCarga={porcentajeCarga}
-              aplicarSolucion={aplicarSolucion}
-            />
+            <div className="min-w-0">
+              <CargaGestionWidget
+                horasTotalesHoy={horasTotalesHoy}
+                limiteDiarioMax={limiteDiarioMax}
+                alertaIgnorada={alertaIgnorada}
+                porcentajeCarga={porcentajeCarga}
+                aplicarSolucion={aplicarSolucion}
+              />
+            </div>
 
             <div className="space-y-3">
               <h2 ref={tituloListaRef} tabIndex={-1} className={`${UI.h2} focus:outline-none`}>Subtareas de hoy</h2>
-              <div className="bg-[#E6F7F8] border border-[#A7ECEE] rounded-2xl p-4 flex items-start gap-3 text-[#0D6E72] text-sm leading-relaxed">
+              <div className="bg-[#E6F7F8] border border-[#A7ECEE] rounded-2xl p-3 sm:p-4 flex items-start gap-3 text-[#0D6E72] text-sm leading-relaxed">
                 <div aria-hidden="true" className="w-5 h-5 rounded-full border border-[#0D6E72] flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5">?</div>
-                <p>
+                <p className="min-w-0">
                   Tus subtareas se agrupan por urgencia y cada una tiene su número de prioridad. Dentro de cada grupo van primero las de fecha más antigua; si coinciden, la que toma menos horas; si aún empatan, las pospuestas y luego las del evento con fecha límite más cercana.
                 </p>
               </div>
             </div>
 
             {!hayGestiones ? (
-              <div className="bg-[#F8FAFC]/50 border-2 border-dashed border-slate-300 rounded-2xl p-6 text-slate-600 text-sm">
+              <div className="bg-[#F8FAFC]/50 border-2 border-dashed border-slate-300 rounded-2xl p-4 sm:p-6 text-slate-600 text-sm">
                 No hay subtareas que coincidan con este filtro.
               </div>
             ) : (
-              <div className="space-y-6">
+              <div className="space-y-4 sm:space-y-6">
                 <SeccionGestiones tipo="atrasadas" gestiones={gestionesAtrasadas} prioridadPorId={prioridadPorId} onRegistrar={registrar} />
                 <SeccionGestiones tipo="hoy" gestiones={gestionesHoy} prioridadPorId={prioridadPorId} onRegistrar={registrar} />
                 <SeccionGestiones tipo="proximas" gestiones={gestionesProximas} prioridadPorId={prioridadPorId} onRegistrar={registrar} />
