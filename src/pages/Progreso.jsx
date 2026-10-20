@@ -36,6 +36,12 @@ const request = async (ruta, { method = 'GET', body } = {}) => {
 // Anillo de foco visible y consistente para los controles definidos en este archivo
 const FOCO = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-700 focus-visible:ring-offset-2';
 
+// Áreas táctiles de 44px en móvil/tablet; en escritorio se mantiene el tamaño original
+const TACTIL = 'min-h-[44px] md:min-h-0';
+
+// Select: 16px en móvil (evita el zoom automático de iOS) y sin desbordar su contenedor
+const CAMPO = 'w-full min-w-0 !text-base sm:!text-sm';
+
 const SELECTOR_FOCO =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -71,7 +77,13 @@ const useDialogo = (onCerrar, bloqueado) => {
     const cont = ref.current;
     const inicial = cont?.querySelector('[data-autofocus]') || cont?.querySelector(SELECTOR_FOCO);
     inicial?.focus();
+
+    // La página de fondo no se desplaza mientras hay un diálogo abierto (importante en móvil)
+    const overflowPrevio = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
     return () => {
+      document.body.style.overflow = overflowPrevio;
       if (previo && previo.isConnected && typeof previo.focus === 'function') previo.focus();
       else document.getElementById('foco-fallback')?.focus();
     };
@@ -104,9 +116,14 @@ const Modal = ({ onCerrar, bloqueado = false, labelledBy, describedBy, role = 'd
   const { ref, onKeyDown } = useDialogo(onCerrar, bloqueado);
   return (
     <div
-      className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 ${z}`}
+      className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 ${z}`}
+      style={{
+        paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
+        paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))'
+      }}
       onMouseDown={(e) => e.target === e.currentTarget && !bloqueado && onCerrar()}
     >
+      {/* Si el contenido es más alto que la pantalla, el diálogo hace scroll por dentro */}
       <div
         ref={ref}
         role={role}
@@ -114,7 +131,7 @@ const Modal = ({ onCerrar, bloqueado = false, labelledBy, describedBy, role = 'd
         aria-labelledby={labelledBy}
         aria-describedby={describedBy}
         onKeyDown={onKeyDown}
-        className={className}
+        className={`${className} w-full max-h-full overflow-y-auto`}
       >
         {children}
       </div>
@@ -140,8 +157,8 @@ const BarraProgreso = ({ completadas, total, pospuestas = 0, titulo, tamano = 'm
   return (
     <div className={`space-y-1.5 ${className}`}>
       {!ocultarCabecera && (
-        <div className="flex items-center justify-between gap-3 text-xs font-bold text-slate-600">
-          <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center justify-between gap-x-3 gap-y-1 flex-wrap text-xs font-bold text-slate-600">
+          <div className="flex items-center gap-2 min-w-0 flex-wrap">
             <span className={ocultarTitulo ? 'sr-only' : ''}>{titulo}</span>
             <EtiquetaPospuestas cantidad={pospuestas} />
           </div>
@@ -174,23 +191,24 @@ const ModalConfirmarEliminar = ({ titulo, descripcion, eliminando, onConfirmar, 
     onCerrar={onCancelar}
     labelledBy="titulo-eliminar"
     describedBy="desc-eliminar"
-    className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl border border-slate-100 text-left"
+    className="bg-white rounded-3xl p-5 sm:p-8 max-w-md shadow-2xl border border-slate-100 text-left"
   >
-    <div className="flex items-start gap-4">
-      <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-700 flex items-center justify-center flex-shrink-0">
-        <AlertTriangle className="w-6 h-6" aria-hidden="true" />
+    <div className="flex items-start gap-3 sm:gap-4">
+      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-red-50 text-red-700 flex items-center justify-center flex-shrink-0">
+        <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" aria-hidden="true" />
       </div>
       <div className="min-w-0">
         <h2 id="titulo-eliminar" className={UI.modalTitulo}>{titulo}</h2>
-        <p id="desc-eliminar" className={`${UI.modalSubtitulo} leading-relaxed`}>{descripcion}</p>
+        <p id="desc-eliminar" className={`${UI.modalSubtitulo} leading-relaxed break-words`}>{descripcion}</p>
       </div>
     </div>
 
-    <div className="flex justify-end gap-3 pt-6 mt-6 border-t border-slate-100">
-      <button type="button" onClick={onCancelar} disabled={eliminando} data-autofocus className={`${UI.btnSecundario} ${FOCO}`}>
+    {/* En móvil los botones se apilan a ancho completo (acción principal arriba) */}
+    <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 pt-5 sm:pt-6 mt-5 sm:mt-6 border-t border-slate-100">
+      <button type="button" onClick={onCancelar} disabled={eliminando} data-autofocus className={`${UI.btnSecundario} ${FOCO} w-full sm:w-auto justify-center ${TACTIL}`}>
         Cancelar
       </button>
-      <button type="button" onClick={onConfirmar} disabled={eliminando} className={`${UI.btnPeligro} ${FOCO}`}>
+      <button type="button" onClick={onConfirmar} disabled={eliminando} className={`${UI.btnPeligro} ${FOCO} w-full sm:w-auto justify-center ${TACTIL}`}>
         <Trash2 className="w-4 h-4" aria-hidden="true" />
         {eliminando ? 'Eliminando...' : 'Eliminar'}
       </button>
@@ -302,10 +320,10 @@ const Progreso = () => {
   const cantidadEventos = eventosCalculados.length;
 
   return (
-    <div className={UI.pagina}>
+    <div className={`${UI.pagina} min-w-0 max-w-full overflow-x-hidden`}>
       {/* Aviso visible (oculto al lector de pantalla para no duplicar) */}
       {mensaje.texto && (
-        <div aria-hidden="true">
+        <div aria-hidden="true" className="break-words">
           <Aviso tipo={mensaje.tipo} texto={mensaje.texto} />
         </div>
       )}
@@ -320,18 +338,20 @@ const Progreso = () => {
       {/* El encabezado (h1) siempre está presente, también durante la carga y ante un error */}
       <EncabezadoPagina titulo="Progreso de eventos" subtitulo="Consulta el avance de tus eventos y subtareas.">
         {listo && (
-          <div className={UI.filtro}>
-            <SlidersHorizontal className="w-4 h-4 text-slate-500 flex-shrink-0" aria-hidden="true" />
-            <select
-              value={filtroEstado}
-              onChange={(e) => setFiltroEstado(e.target.value)}
-              aria-label="Filtrar eventos"
-              className={`${UI.filtroSelect} ${FOCO}`}
-            >
-              <option value="todos">Todos los eventos</option>
-              <option value="en_preparacion">En preparación</option>
-              <option value="completados">Completados</option>
-            </select>
+          <div className="w-full sm:w-auto">
+            <div className={`${UI.filtro} w-full sm:w-auto`}>
+              <SlidersHorizontal className="w-4 h-4 text-slate-500 flex-shrink-0" aria-hidden="true" />
+              <select
+                value={filtroEstado}
+                onChange={(e) => setFiltroEstado(e.target.value)}
+                aria-label="Filtrar eventos"
+                className={`${UI.filtroSelect} ${FOCO} ${CAMPO} ${TACTIL}`}
+              >
+                <option value="todos">Todos los eventos</option>
+                <option value="en_preparacion">En preparación</option>
+                <option value="completados">Completados</option>
+              </select>
+            </div>
           </div>
         )}
       </EncabezadoPagina>
@@ -347,12 +367,12 @@ const Progreso = () => {
       )}
 
       {error && !cargando && (
-        <div role="alert" className="p-5 text-red-700 bg-red-50/80 rounded-2xl text-sm border border-red-200 flex flex-col items-start gap-3">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-5 h-5" aria-hidden="true" />
-            <span className="font-bold">{error}</span>
+        <div role="alert" className="p-4 sm:p-5 text-red-700 bg-red-50/80 rounded-2xl text-sm border border-red-200 flex flex-col items-stretch sm:items-start gap-3">
+          <div className="flex items-start sm:items-center gap-2">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
+            <span className="font-bold break-words min-w-0">{error}</span>
           </div>
-          <button type="button" onClick={obtenerDatos} className={`${UI.btnPrimario} ${FOCO}`}>
+          <button type="button" onClick={obtenerDatos} className={`${UI.btnPrimario} ${FOCO} w-full sm:w-auto justify-center ${TACTIL}`}>
             Reintentar
           </button>
         </div>
@@ -365,27 +385,27 @@ const Progreso = () => {
             Mostrando {cantidadEventos} {cantidadEventos === 1 ? 'evento' : 'eventos'}
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className={`${UI.tarjeta} flex flex-col justify-between space-y-4`}>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+            <div className={`${UI.tarjeta} flex flex-col justify-between space-y-3 sm:space-y-4 min-w-0`}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-cyan-700 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
                   <BarChart3 className="w-5 h-5" aria-hidden="true" />
                 </div>
                 <span className="text-xs font-semibold text-slate-600">Eventos mostrados</span>
               </div>
-              <div className="text-3xl font-extrabold text-slate-900 tracking-tight">{cantidadEventos}</div>
+              <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{cantidadEventos}</div>
             </div>
 
-            <div className={`${UI.tarjeta} flex flex-col justify-between space-y-4`}>
+            <div className={`${UI.tarjeta} flex flex-col justify-between space-y-3 sm:space-y-4 min-w-0`}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
                   <CheckCircle2 className="w-5 h-5" aria-hidden="true" />
                 </div>
                 <span className="text-xs font-semibold text-slate-600">Subtareas completadas</span>
               </div>
-              <div className="text-3xl font-extrabold text-slate-900 tracking-tight">
+              <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
                 {global.completadas}{' '}
-                <span className="text-xl text-slate-600 font-medium">
+                <span className="text-lg sm:text-xl text-slate-600 font-medium">
                   <span className="sr-only">de </span>
                   <span aria-hidden="true">/ </span>
                   {global.total}
@@ -393,7 +413,7 @@ const Progreso = () => {
               </div>
             </div>
 
-            <div className={`${UI.tarjeta} flex flex-col justify-between space-y-4`}>
+            <div className={`${UI.tarjeta} flex flex-col justify-between space-y-3 sm:space-y-4 min-w-0`}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-[#7E22CE] text-white flex items-center justify-center flex-shrink-0 shadow-sm">
                   <TrendingUp className="w-5 h-5" aria-hidden="true" />
@@ -401,8 +421,8 @@ const Progreso = () => {
                 <span className="text-xs font-semibold text-slate-600">Cumplimiento global</span>
               </div>
               <div className="space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-3xl font-extrabold text-slate-900 tracking-tight">{global.porcentaje}%</div>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{global.porcentaje}%</div>
                   <EtiquetaPospuestas cantidad={global.pospuestas} />
                 </div>
                 <BarraProgreso completadas={global.completadas} total={global.total} titulo="Cumplimiento global" tamano="sm" ocultarCabecera />
@@ -414,17 +434,17 @@ const Progreso = () => {
             <h2 id="foco-fallback" tabIndex={-1} className={`${UI.h2} focus:outline-none`}>Detalle por evento</h2>
 
             {cantidadEventos === 0 ? (
-              <div className={`${UI.tarjeta} p-8 text-center text-slate-600 text-sm`}>
+              <div className={`${UI.tarjeta} p-6 sm:p-8 text-center text-slate-600 text-sm`}>
                 No hay eventos registrados que coincidan con este filtro.
               </div>
             ) : (
-              <ul className="flex flex-col gap-4">
+              <ul className="flex flex-col gap-3 sm:gap-4">
                 {eventosCalculados.map((evento) => (
-                  <li key={evento.id} className={`${UI.tarjeta} flex flex-col gap-4 hover:shadow-md transition-all`}>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <li key={evento.id} className={`${UI.tarjeta} flex flex-col gap-4 hover:shadow-md transition-all min-w-0`}>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                       <div className="flex flex-col gap-1.5 min-w-0">
                         <div className="flex items-center gap-2.5 flex-wrap">
-                          <h3 className="text-base font-extrabold text-slate-900">{evento.nombre}</h3>
+                          <h3 className="text-base font-extrabold text-slate-900 break-words min-w-0">{evento.nombre}</h3>
                           <span className="inline-flex items-center px-2 py-0.5 bg-[#F3E8FF] text-[#7E22CE] border border-[#E9D5FF] rounded-full text-xs leading-4 font-bold whitespace-nowrap">
                             <span className="sr-only">Estado: </span>
                             {evento.estado || 'En preparación'}
@@ -434,12 +454,13 @@ const Progreso = () => {
                         <p className="text-xs text-slate-600 font-medium">{evento.categoria || evento.tipo || 'Social'}</p>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      {/* En móvil "Ver detalle" ocupa el ancho disponible junto al botón de eliminar */}
+                      <div className="flex items-stretch md:items-center gap-2 w-full md:w-auto">
                         <button
                           type="button"
                           onClick={() => navigate(`/detalle-evento/${evento.id}`)}
                           aria-label={`Ver detalle de ${evento.nombre}`}
-                          className={`inline-flex items-center gap-1 text-xs font-bold text-[#7E22CE] bg-purple-50 hover:bg-[#7E22CE] hover:text-white px-3.5 py-2 rounded-xl transition whitespace-nowrap cursor-pointer ${FOCO}`}
+                          className={`inline-flex items-center justify-center gap-1 flex-1 md:flex-none text-xs font-bold text-[#7E22CE] bg-purple-50 hover:bg-[#7E22CE] hover:text-white px-3.5 py-2 rounded-xl transition whitespace-nowrap cursor-pointer ${TACTIL} ${FOCO}`}
                         >
                           <span>Ver detalle</span>
                           <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
@@ -447,7 +468,7 @@ const Progreso = () => {
                         <button
                           type="button"
                           onClick={() => setEventoAEliminar(evento)}
-                          className={`p-2 text-slate-600 hover:text-red-700 transition cursor-pointer rounded-lg hover:bg-red-50 ${FOCO}`}
+                          className={`inline-flex items-center justify-center p-2 min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 text-slate-600 hover:text-red-700 transition cursor-pointer rounded-lg hover:bg-red-50 ${FOCO}`}
                           aria-label={`Eliminar ${evento.nombre}`}
                           aria-haspopup="dialog"
                         >
