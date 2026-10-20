@@ -55,6 +55,16 @@ const NOTA_POR_DEFECTO = 'Pospuesto sin nota';
 // Anillo de foco visible y consistente para los controles definidos en este archivo
 const FOCO = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-700 focus-visible:ring-offset-2';
 
+// Áreas táctiles de 44px en móvil/tablet; en escritorio se mantiene el tamaño original
+const TACTIL = 'min-h-[44px] md:min-h-0';
+
+// Campos: 16px en móvil (evita el zoom automático de iOS) y sin desbordar su contenedor
+const CAMPO = 'w-full min-w-0 !text-base sm:!text-sm';
+
+// Pie de los diálogos: botones apilados a ancho completo en móvil (acción principal arriba), en fila desde sm
+const PIE_DIALOGO = 'flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 pt-5 border-t border-slate-100';
+const BTN_DIALOGO = `w-full sm:w-auto justify-center ${TACTIL}`;
+
 const SELECTOR_FOCO =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -113,7 +123,7 @@ const attrsCampo = (err, campo, id, extraDescribedBy) => {
 
 const MensajeCampo = ({ id, texto }) =>
   texto ? (
-    <p id={id} role="alert" className={UI.error}>
+    <p id={id} role="alert" className={`${UI.error} break-words`}>
       {texto}
     </p>
   ) : null;
@@ -140,7 +150,13 @@ const useDialogo = (onCerrar, bloqueado) => {
     const cont = ref.current;
     const inicial = cont?.querySelector('[data-autofocus]') || cont?.querySelector(SELECTOR_FOCO);
     inicial?.focus();
+
+    // La página de fondo no se desplaza mientras hay un diálogo abierto (importante en móvil)
+    const overflowPrevio = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
     return () => {
+      document.body.style.overflow = overflowPrevio;
       if (previo && previo.isConnected && typeof previo.focus === 'function') previo.focus();
       else document.getElementById('foco-fallback')?.focus();
     };
@@ -173,9 +189,14 @@ const Modal = ({ onCerrar, bloqueado = false, labelledBy, describedBy, role = 'd
   const { ref, onKeyDown } = useDialogo(onCerrar, bloqueado);
   return (
     <div
-      className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 ${z}`}
+      className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 ${z}`}
+      style={{
+        paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
+        paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))'
+      }}
       onMouseDown={(e) => e.target === e.currentTarget && !bloqueado && onCerrar()}
     >
+      {/* Altura máxima = pantalla; si el contenido es más alto (teclado abierto, pantallas bajas) el diálogo hace scroll por dentro */}
       <div
         ref={ref}
         role={role}
@@ -183,7 +204,7 @@ const Modal = ({ onCerrar, bloqueado = false, labelledBy, describedBy, role = 'd
         aria-labelledby={labelledBy}
         aria-describedby={describedBy}
         onKeyDown={onKeyDown}
-        className={className}
+        className={`${className} w-full max-h-full overflow-y-auto`}
       >
         {children}
       </div>
@@ -195,7 +216,7 @@ const BotonCerrar = ({ onClick }) => (
   <button
     type="button"
     onClick={onClick}
-    className={`p-1 rounded text-slate-600 hover:text-slate-800 transition cursor-pointer ${FOCO}`}
+    className={`p-2 -m-1 sm:p-1 sm:m-0 rounded text-slate-600 hover:text-slate-800 transition cursor-pointer flex-shrink-0 ${FOCO}`}
     aria-label="Cerrar diálogo"
   >
     <X className="w-5 h-5" aria-hidden="true" />
@@ -220,8 +241,8 @@ const BarraProgreso = ({ completadas, total, pospuestas = 0, titulo, tamano = 'm
   return (
     <div className={`space-y-1.5 ${className}`}>
       {!ocultarCabecera && (
-        <div className="flex items-center justify-between gap-3 text-xs font-bold text-slate-600">
-          <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center justify-between gap-x-3 gap-y-1 flex-wrap text-xs font-bold text-slate-600">
+          <div className="flex items-center gap-2 min-w-0 flex-wrap">
             <span className={ocultarTitulo ? 'sr-only' : ''}>{titulo}</span>
             <EtiquetaPospuestas cantidad={pospuestas} />
           </div>
@@ -292,13 +313,14 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
 
   return (
     <>
-      <div className="flex items-center gap-2 flex-shrink-0">
+      {/* En móvil los botones ocupan todo el ancho de la fila; desde sm quedan a su tamaño */}
+      <div className="flex items-stretch sm:items-center gap-2 w-full sm:w-auto flex-shrink-0">
         <button
           type="button"
           onClick={() => ejecutar(completada ? 'pendiente' : 'hecho')}
           disabled={guardando}
           aria-label={completada ? `Completada. Marcar como pendiente: ${gestion.descripcion}` : `Marcar como hecha: ${gestion.descripcion}`}
-          className={`${UI.btnHecha} ${completada ? UI.btnHechaListo : UI.btnHechaPendiente} ${FOCO}`}
+          className={`${UI.btnHecha} ${completada ? UI.btnHechaListo : UI.btnHechaPendiente} ${FOCO} ${TACTIL} flex-1 sm:flex-none justify-center`}
         >
           <Check className="w-3.5 h-3.5" aria-hidden="true" />
           <span>{completada ? 'Completada' : 'Hecha'}</span>
@@ -315,7 +337,7 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
             disabled={guardando}
             aria-label={`Posponer: ${gestion.descripcion}`}
             aria-haspopup="dialog"
-            className={`${UI.btnPosponer} ${FOCO}`}
+            className={`${UI.btnPosponer} ${FOCO} ${TACTIL} flex-1 sm:flex-none justify-center`}
           >
             Posponer
           </button>
@@ -324,10 +346,10 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
 
       {abierto && (
         <Modal onCerrar={cerrar} labelledBy="titulo-posponer" describedBy="descripcion-posponer" className={UI.modal}>
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-4 min-w-0">
-              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center flex-shrink-0">
-                <CalendarClock className="w-6 h-6" aria-hidden="true" />
+          <div className="flex items-start justify-between gap-3 sm:gap-4">
+            <div className="flex items-start gap-3 sm:gap-4 min-w-0">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center flex-shrink-0">
+                <CalendarClock className="w-5 h-5 sm:w-6 sm:h-6" aria-hidden="true" />
               </div>
               <div className="min-w-0">
                 <h2 id="titulo-posponer" className={UI.modalTitulo}>Posponer subtarea</h2>
@@ -337,7 +359,7 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
             <BotonCerrar onClick={cerrar} />
           </div>
 
-          <form onSubmit={confirmarPosponer} noValidate className="mt-6 space-y-5">
+          <form onSubmit={confirmarPosponer} noValidate className="mt-5 sm:mt-6 space-y-4 sm:space-y-5">
             <div>
               <label htmlFor="posponer-fecha" className={UI.label}>
                 Nueva fecha <Asterisco />
@@ -359,7 +381,7 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
                     setForm({ ...form, fecha: e.target.value });
                     setErrorFecha('');
                   }}
-                  className={`${errorFecha ? UI.inputError : UI.input} pl-11 ${FOCO}`}
+                  className={`${errorFecha ? UI.inputError : UI.input} ${CAMPO} pl-11 ${FOCO}`}
                 />
               </div>
               <MensajeCampo id="posponer-fecha-error" texto={errorFecha} />
@@ -380,18 +402,18 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
                 value={form.nota}
                 onChange={(e) => setForm({ ...form, nota: e.target.value })}
                 aria-describedby="posponer-nota-contador"
-                className={`${UI.input} resize-none ${FOCO}`}
+                className={`${UI.input} ${CAMPO} resize-none ${FOCO}`}
               />
               <p id="posponer-nota-contador" className="text-xs text-slate-600 mt-1 text-right">
                 {form.nota.length}/300<span className="sr-only"> caracteres</span>
               </p>
             </div>
 
-            <div className="flex justify-end gap-3 pt-5 border-t border-slate-100">
-              <button type="button" onClick={cerrar} className={`${UI.btnSecundario} ${FOCO}`}>
+            <div className={PIE_DIALOGO}>
+              <button type="button" onClick={cerrar} className={`${UI.btnSecundario} ${FOCO} ${BTN_DIALOGO}`}>
                 Cancelar
               </button>
-              <button type="submit" className={`${UI.btnPrimario} ${FOCO}`}>
+              <button type="submit" className={`${UI.btnPrimario} ${FOCO} ${BTN_DIALOGO}`}>
                 Posponer
               </button>
             </div>
@@ -408,7 +430,7 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
 const DateField = ({ invalido = false, ...props }) => (
   <div className="relative">
     <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" aria-hidden="true" />
-    <input type="date" {...props} className={`${invalido ? UI.inputError : UI.input} pl-11 ${FOCO}`} />
+    <input type="date" {...props} className={`${invalido ? UI.inputError : UI.input} ${CAMPO} pl-11 ${FOCO}`} />
   </div>
 );
 
@@ -421,23 +443,23 @@ const ModalConfirmarEliminar = ({ titulo, descripcion, eliminando, onConfirmar, 
     onCerrar={onCancelar}
     labelledBy="titulo-eliminar"
     describedBy="desc-eliminar"
-    className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl border border-slate-100 text-left"
+    className="bg-white rounded-3xl p-5 sm:p-8 max-w-md shadow-2xl border border-slate-100 text-left"
   >
-    <div className="flex items-start gap-4">
-      <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-700 flex items-center justify-center flex-shrink-0">
-        <AlertTriangle className="w-6 h-6" aria-hidden="true" />
+    <div className="flex items-start gap-3 sm:gap-4">
+      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-red-50 text-red-700 flex items-center justify-center flex-shrink-0">
+        <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" aria-hidden="true" />
       </div>
       <div className="min-w-0">
         <h2 id="titulo-eliminar" className={UI.modalTitulo}>{titulo}</h2>
-        <p id="desc-eliminar" className={`${UI.modalSubtitulo} leading-relaxed`}>{descripcion}</p>
+        <p id="desc-eliminar" className={`${UI.modalSubtitulo} leading-relaxed break-words`}>{descripcion}</p>
       </div>
     </div>
 
-    <div className="flex justify-end gap-3 pt-6 mt-6 border-t border-slate-100">
-      <button type="button" onClick={onCancelar} disabled={eliminando} data-autofocus className={`${UI.btnSecundario} ${FOCO}`}>
+    <div className={`${PIE_DIALOGO} mt-6`}>
+      <button type="button" onClick={onCancelar} disabled={eliminando} data-autofocus className={`${UI.btnSecundario} ${FOCO} ${BTN_DIALOGO}`}>
         Cancelar
       </button>
-      <button type="button" onClick={onConfirmar} disabled={eliminando} className={`${UI.btnPeligro} ${FOCO}`}>
+      <button type="button" onClick={onConfirmar} disabled={eliminando} className={`${UI.btnPeligro} ${FOCO} ${BTN_DIALOGO}`}>
         <Trash2 className="w-4 h-4" aria-hidden="true" />
         {eliminando ? 'Eliminando...' : 'Eliminar'}
       </button>
@@ -786,15 +808,15 @@ const DetalleEvento = () => {
 
   if (!cargado || eventos.length === 0) {
     return (
-      <div className={UI.pagina}>
-        <button type="button" onClick={() => navigate('/hoy')} className={`inline-flex items-center gap-1.5 w-fit ${UI.btnEnlace} ${FOCO}`}>
+      <div className={`${UI.pagina} min-w-0 max-w-full overflow-x-hidden`}>
+        <button type="button" onClick={() => navigate('/hoy')} className={`inline-flex items-center gap-1.5 w-fit ${UI.btnEnlace} ${FOCO} ${TACTIL}`}>
           <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Volver a Hoy
         </button>
-        <div role="alert" className="p-5 bg-red-50 text-red-700 border border-red-200 rounded-2xl text-sm flex items-center gap-3">
+        <div role="alert" className="p-4 sm:p-5 bg-red-50 text-red-700 border border-red-200 rounded-2xl text-sm flex items-start sm:items-center gap-3">
           <AlertCircle className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
-          <span>{error || 'No hay eventos disponibles para mostrar. Crea un evento nuevo.'}</span>
+          <span className="min-w-0 break-words">{error || 'No hay eventos disponibles para mostrar. Crea un evento nuevo.'}</span>
         </div>
-        <button type="button" onClick={() => cargar()} className={`${UI.btnPrimario} ${FOCO}`}>
+        <button type="button" onClick={() => cargar()} className={`${UI.btnPrimario} ${FOCO} w-full sm:w-auto justify-center ${TACTIL}`}>
           Reintentar cargar
         </button>
       </div>
@@ -817,10 +839,10 @@ const DetalleEvento = () => {
   const limiteMuyBajo = !isNaN(nuevoLimiteForm) && nuevoLimiteForm < horasSubtareasTotal;
 
   return (
-    <div className={UI.pagina}>
+    <div className={`${UI.pagina} min-w-0 max-w-full overflow-x-hidden`}>
       {/* Aviso visible (oculto al lector de pantalla para no duplicar) */}
       {mensaje.texto && (
-        <div aria-hidden="true">
+        <div aria-hidden="true" className="break-words">
           <Aviso tipo={mensaje.tipo} texto={mensaje.texto} />
         </div>
       )}
@@ -832,14 +854,14 @@ const DetalleEvento = () => {
         {mensaje.tipo === 'error' ? mensaje.texto : ''}
       </div>
 
-      <button type="button" onClick={() => navigate('/hoy')} className={`inline-flex items-center gap-1.5 w-fit -mb-2 ${UI.btnEnlace} ${FOCO}`}>
+      <button type="button" onClick={() => navigate('/hoy')} className={`inline-flex items-center gap-1.5 w-fit md:-mb-2 ${UI.btnEnlace} ${FOCO} ${TACTIL}`}>
         <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Volver a Hoy
       </button>
 
       {idNoEncontrado && (
-        <div role="alert" className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-2xl text-sm flex items-center gap-3">
+        <div role="alert" className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-2xl text-sm flex items-start sm:items-center gap-3">
           <AlertCircle className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
-          <span>No encontramos el evento solicitado. Puede que haya sido eliminado. Elige otro evento de la lista.</span>
+          <span className="min-w-0">No encontramos el evento solicitado. Puede que haya sido eliminado. Elige otro evento de la lista.</span>
         </div>
       )}
 
@@ -847,32 +869,35 @@ const DetalleEvento = () => {
         titulo={seleccion === 'todos' ? 'Lista general de eventos' : eventoActivo.nombre}
         subtitulo={seleccion === 'todos' ? 'Selecciona cualquier evento para ver sus subtareas y detalles completos.' : undefined}
       >
-        <div className={UI.filtro}>
-          <SlidersHorizontal className="w-4 h-4 text-slate-500 flex-shrink-0" aria-hidden="true" />
-          <select
-            value={seleccion}
-            onChange={(e) => setEventoSeleccionadoId(e.target.value)}
-            aria-label="Seleccionar evento"
-            className={`${UI.filtroSelect} ${FOCO}`}
-          >
-            <option value="todos">Todos los eventos</option>
-            {eventos.map((e) => (
-              <option key={e.id} value={e.id}>{e.nombre}</option>
-            ))}
-          </select>
-        </div>
+        {/* Selector y botón de editar: apilados a ancho completo en móvil, en fila desde sm */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 w-full sm:w-auto min-w-0">
+          <div className={`${UI.filtro} w-full sm:w-auto min-w-0`}>
+            <SlidersHorizontal className="w-4 h-4 text-slate-500 flex-shrink-0" aria-hidden="true" />
+            <select
+              value={seleccion}
+              onChange={(e) => setEventoSeleccionadoId(e.target.value)}
+              aria-label="Seleccionar evento"
+              className={`${UI.filtroSelect} ${FOCO} w-full min-w-0 max-w-full ${CAMPO} ${TACTIL}`}
+            >
+              <option value="todos">Todos los eventos</option>
+              {eventos.map((e) => (
+                <option key={e.id} value={e.id}>{e.nombre}</option>
+              ))}
+            </select>
+          </div>
 
-        {eventoActivo && (
-          <button type="button" onClick={handleAbrirEditarEvento} className={`${UI.btnSecundarioSm} ${FOCO}`}>
-            <Edit3 className="w-4 h-4 text-purple-700" aria-hidden="true" /> Editar evento
-          </button>
-        )}
+          {eventoActivo && (
+            <button type="button" onClick={handleAbrirEditarEvento} className={`${UI.btnSecundarioSm} ${FOCO} w-full sm:w-auto justify-center ${TACTIL}`}>
+              <Edit3 className="w-4 h-4 text-purple-700" aria-hidden="true" /> Editar evento
+            </button>
+          )}
+        </div>
       </EncabezadoPagina>
 
       {seleccion === 'todos' ? (
         <>
           <h2 id="foco-fallback" tabIndex={-1} className="sr-only focus:outline-none">Eventos</h2>
-          <ul className="grid grid-cols-1 gap-4">
+          <ul className="grid grid-cols-1 gap-3 sm:gap-4">
             {eventos.map((ev) => {
               const p = calcularProgreso(gestionesDe(ev));
               return (
@@ -880,11 +905,11 @@ const DetalleEvento = () => {
                 <li
                   key={ev.id}
                   onClick={() => setEventoSeleccionadoId(String(ev.id))}
-                  className={`${UI.tarjeta} hover:shadow-md transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 group`}
+                  className={`${UI.tarjeta} hover:shadow-md transition-all cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4 group min-w-0`}
                 >
                   <div className="space-y-1.5 min-w-0">
                     <div className="flex items-center gap-2.5 flex-wrap">
-                      <h3 className="text-base font-extrabold text-slate-900 group-hover:text-[#7E22CE] transition">{ev.nombre}</h3>
+                      <h3 className="text-base font-extrabold text-slate-900 group-hover:text-[#7E22CE] transition break-words min-w-0">{ev.nombre}</h3>
                       <EtiquetaPospuestas cantidad={p.pospuestas} />
                     </div>
                     <p className="text-xs text-slate-600 font-medium">
@@ -892,8 +917,8 @@ const DetalleEvento = () => {
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-6 justify-between sm:justify-end">
-                    <BarraProgreso completadas={p.completadas} total={p.total} titulo={`Progreso de ${ev.nombre}`} ocultarTitulo tamano="sm" className="w-full sm:w-52" />
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 md:justify-end min-w-0">
+                    <BarraProgreso completadas={p.completadas} total={p.total} titulo={`Progreso de ${ev.nombre}`} ocultarTitulo tamano="sm" className="w-full sm:flex-1 md:flex-none md:w-52" />
                     <button
                       type="button"
                       onClick={(e) => {
@@ -901,7 +926,7 @@ const DetalleEvento = () => {
                         setEventoSeleccionadoId(String(ev.id));
                       }}
                       aria-label={`Ver detalle de ${ev.nombre}`}
-                      className={`inline-flex items-center gap-1 text-xs font-bold text-[#7E22CE] bg-purple-50 group-hover:bg-[#7E22CE] group-hover:text-white px-3.5 py-2 rounded-xl transition whitespace-nowrap cursor-pointer ${FOCO}`}
+                      className={`inline-flex items-center justify-center gap-1 text-xs font-bold text-[#7E22CE] bg-purple-50 group-hover:bg-[#7E22CE] group-hover:text-white px-3.5 py-2 rounded-xl transition whitespace-nowrap cursor-pointer w-full sm:w-auto ${TACTIL} ${FOCO}`}
                     >
                       Ver detalle <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
                     </button>
@@ -913,7 +938,7 @@ const DetalleEvento = () => {
         </>
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
             <span className="px-3 py-1 bg-[#F3E8FF] text-[#7E22CE] border border-[#E9D5FF] rounded-full text-xs font-bold">
               <span className="sr-only">Estado: </span>{eventoActivo.estado || 'En preparación'}
             </span>
@@ -935,12 +960,12 @@ const DetalleEvento = () => {
             <BarraProgreso completadas={progreso.completadas} total={progreso.total} pospuestas={progreso.pospuestas} titulo="Progreso del evento" tamano="lg" />
           </div>
 
-          <section aria-labelledby="foco-fallback" className={`${UI.tarjeta} space-y-5`}>
-            <div className="flex justify-between items-center pb-4 border-b border-slate-100">
+          <section aria-labelledby="foco-fallback" className={`${UI.tarjeta} space-y-4 sm:space-y-5 min-w-0`}>
+            <div className="flex justify-between items-center gap-3 flex-wrap pb-4 border-b border-slate-100">
               <h2 id="foco-fallback" tabIndex={-1} className={`${UI.h2} focus:outline-none`}>Subtareas</h2>
               <div className="flex items-center gap-3">
                 <span className="text-xs font-semibold text-slate-600 hidden sm:inline">{progreso.total} subtareas</span>
-                <button type="button" onClick={handleAbrirCrear} className={`${UI.btnAgregarSm} ${FOCO}`}>
+                <button type="button" onClick={handleAbrirCrear} className={`${UI.btnAgregarSm} ${FOCO} ${TACTIL}`}>
                   <Plus className="w-4 h-4" aria-hidden="true" /> Agregar subtarea
                 </button>
               </div>
@@ -956,7 +981,7 @@ const DetalleEvento = () => {
                   return (
                     <li
                       key={sub.id}
-                      className={`p-4 border rounded-xl transition flex flex-col gap-3 ${
+                      className={`p-3 sm:p-4 border rounded-xl transition flex flex-col gap-3 min-w-0 ${
                         pospuesta
                           ? 'bg-amber-50/50 hover:bg-amber-50 border-amber-200 border-l-4 border-l-amber-500'
                           : 'bg-slate-50/50 hover:bg-slate-50 border-slate-200/80'
@@ -965,28 +990,28 @@ const DetalleEvento = () => {
                       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                         <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
                           {/* Sin truncar: el texto completo debe poder leerse con zoom o en pantallas angostas */}
-                          <span className={`text-sm font-semibold break-words ${sub.completada ? 'line-through text-slate-500' : 'text-slate-900'}`}>
+                          <span className={`text-sm font-semibold break-words min-w-0 ${sub.completada ? 'line-through text-slate-500' : 'text-slate-900'}`}>
                             {sub.descripcion}
                           </span>
                           {sub.completada && <span className="sr-only">(completada)</span>}
                           {pospuesta && <EtiquetaPospuestas texto="Pospuesta" />}
                         </div>
 
-                        <div className="flex items-center gap-3 sm:gap-4 flex-wrap lg:justify-end">
+                        <div className="flex items-center gap-x-3 gap-y-2 sm:gap-x-4 flex-wrap lg:justify-end">
                           {sub.plazo && (
                             <span
                               className={`inline-flex items-center gap-1 text-xs font-medium ${
                                 pospuesta ? 'text-amber-800 font-semibold' : 'text-slate-600'
                               }`}
                             >
-                              <CalendarClock className={`w-3.5 h-3.5 ${pospuesta ? 'text-amber-700' : 'text-slate-500'}`} aria-hidden="true" />
+                              <CalendarClock className={`w-3.5 h-3.5 flex-shrink-0 ${pospuesta ? 'text-amber-700' : 'text-slate-500'}`} aria-hidden="true" />
                               {pospuesta ? 'Nueva fecha: ' : 'Plazo: '}
                               {formatearFechaDisplay(sub.plazo)}
                             </span>
                           )}
                           {sub.horas_estimadas !== undefined && sub.horas_estimadas !== null && (
                             <span className="inline-flex items-center gap-1 text-xs text-slate-600 font-medium">
-                              <Clock className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" /> {sub.horas_estimadas} h
+                              <Clock className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" aria-hidden="true" /> {sub.horas_estimadas} h
                               <span className="sr-only"> estimadas</span>
                             </span>
                           )}
@@ -997,11 +1022,12 @@ const DetalleEvento = () => {
                             onRegistrar={(accion, datos) => registrar(sub, accion, datos)}
                           />
 
-                          <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
+                          {/* En móvil Editar/Eliminar quedan en su propia fila, alineados a la derecha */}
+                          <div className="flex items-center gap-1 ml-auto sm:ml-0 sm:border-l border-slate-200 sm:pl-2">
                             <button
                               type="button"
                               onClick={() => handleAbrirEditar(sub)}
-                              className={`p-1.5 text-slate-600 hover:text-purple-700 rounded-lg transition cursor-pointer ${FOCO}`}
+                              className={`p-2.5 md:p-1.5 text-slate-600 hover:text-purple-700 rounded-lg transition cursor-pointer ${FOCO}`}
                               aria-label={`Editar subtarea: ${sub.descripcion}`}
                               aria-haspopup="dialog"
                             >
@@ -1010,7 +1036,7 @@ const DetalleEvento = () => {
                             <button
                               type="button"
                               onClick={() => setGestionAEliminar(sub)}
-                              className={`p-1.5 text-slate-600 hover:text-red-700 rounded-lg transition cursor-pointer ${FOCO}`}
+                              className={`p-2.5 md:p-1.5 text-slate-600 hover:text-red-700 rounded-lg transition cursor-pointer ${FOCO}`}
                               aria-label={`Eliminar subtarea: ${sub.descripcion}`}
                               aria-haspopup="dialog"
                             >
@@ -1023,7 +1049,7 @@ const DetalleEvento = () => {
                       {mostrarNota && (
                         <div className="flex items-start gap-2 text-xs text-amber-900 bg-white/70 border border-amber-200 rounded-lg px-3 py-2 w-full">
                           <StickyNote className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-amber-700" aria-hidden="true" />
-                          <p className="leading-relaxed break-words">
+                          <p className="leading-relaxed break-words min-w-0">
                             <span className="font-semibold">Motivo:</span> {sub.nota_pospuesto}
                           </p>
                         </div>
@@ -1040,15 +1066,15 @@ const DetalleEvento = () => {
       {/* MODAL: EDITAR EVENTO */}
       {modalEvento && (
         <Modal onCerrar={() => setModalEvento(false)} labelledBy="titulo-editar-evento" describedBy="desc-editar-evento" className={UI.modal}>
-          <div className="flex items-start justify-between gap-4">
-            <div>
+          <div className="flex items-start justify-between gap-3 sm:gap-4">
+            <div className="min-w-0">
               <h2 id="titulo-editar-evento" className={UI.modalTitulo}>Editar evento</h2>
               <p id="desc-editar-evento" className={UI.modalSubtitulo}>Actualiza los datos generales y la capacidad diaria de trabajo.</p>
             </div>
             <BotonCerrar onClick={() => setModalEvento(false)} />
           </div>
 
-          <form onSubmit={handleGuardarEvento} noValidate className="mt-6 space-y-5">
+          <form onSubmit={handleGuardarEvento} noValidate className="mt-5 sm:mt-6 space-y-4 sm:space-y-5">
             <div>
               <label htmlFor="evento-nombre" className={UI.label}>
                 Nombre del evento <Asterisco />
@@ -1058,7 +1084,7 @@ const DetalleEvento = () => {
                 data-autofocus
                 aria-required="true"
                 autoComplete="off"
-                className={`${errEvento.campo === 'nombre' ? UI.inputError : UI.input} ${FOCO}`}
+                className={`${errEvento.campo === 'nombre' ? UI.inputError : UI.input} ${CAMPO} ${FOCO}`}
                 value={formEvento.nombre}
                 {...attrsCampo(errEvento, 'nombre', 'evento-nombre')}
                 onChange={(e) => {
@@ -1070,10 +1096,10 @@ const DetalleEvento = () => {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
+              <div className="min-w-0">
                 <label htmlFor="evento-tipo" className={UI.label}>Tipo de evento</label>
                 <select
-                  className={`${UI.input} cursor-pointer ${FOCO}`}
+                  className={`${UI.input} ${CAMPO} cursor-pointer ${FOCO}`}
                   value={formEvento.tipo}
                   {...attrsCampo(errEvento, 'tipo', 'evento-tipo')}
                   onChange={(e) => setFormEvento({ ...formEvento, tipo: e.target.value })}
@@ -1086,7 +1112,7 @@ const DetalleEvento = () => {
                 </select>
               </div>
 
-              <div>
+              <div className="min-w-0">
                 <label htmlFor="evento-fecha" className={UI.label}>
                   Fecha límite <Asterisco />
                 </label>
@@ -1116,9 +1142,10 @@ const DetalleEvento = () => {
                   step="0.5"
                   min="1"
                   max="24"
+                  inputMode="decimal"
                   aria-required="true"
                   placeholder="Ej. 6"
-                  className={`${limiteMuyBajo || errEvento.campo === 'limite' ? UI.inputError : UI.input} pl-11 pr-24 ${FOCO}`}
+                  className={`${limiteMuyBajo || errEvento.campo === 'limite' ? UI.inputError : UI.input} ${CAMPO} pl-11 pr-20 ${FOCO}`}
                   value={formEvento.limite_diario_horas}
                   {...attrsCampo(errEvento, 'limite', 'evento-limite', limiteMuyBajo ? 'evento-limite-aviso' : undefined)}
                   aria-invalid={limiteMuyBajo || errEvento.campo === 'limite' ? 'true' : undefined}
@@ -1131,7 +1158,7 @@ const DetalleEvento = () => {
               </div>
               <MensajeCampo id="evento-limite-error" texto={errEvento.campo === 'limite' ? errEvento.texto : ''} />
               {limiteMuyBajo && errEvento.campo !== 'limite' && (
-                <p id="evento-limite-aviso" role="alert" className={UI.error}>
+                <p id="evento-limite-aviso" role="alert" className={`${UI.error} break-words`}>
                   Tus subtareas ya suman {horasSubtareasTotal} h. Reduce o elimina subtareas, o usa un límite de {horasSubtareasTotal} h o más.
                 </p>
               )}
@@ -1139,11 +1166,11 @@ const DetalleEvento = () => {
 
             <MensajeCampo id="evento-general-error" texto={errEvento.campo === 'general' ? errEvento.texto : ''} />
 
-            <div className="flex justify-end gap-3 pt-5 border-t border-slate-100">
-              <button type="button" onClick={() => setModalEvento(false)} className={`${UI.btnSecundario} ${FOCO}`}>
+            <div className={PIE_DIALOGO}>
+              <button type="button" onClick={() => setModalEvento(false)} className={`${UI.btnSecundario} ${FOCO} ${BTN_DIALOGO}`}>
                 Cancelar
               </button>
-              <button type="submit" className={`${UI.btnPrimario} ${FOCO}`}>
+              <button type="submit" className={`${UI.btnPrimario} ${FOCO} ${BTN_DIALOGO}`}>
                 Guardar cambios
               </button>
             </div>
@@ -1154,8 +1181,8 @@ const DetalleEvento = () => {
       {/* MODAL: CREAR / EDITAR SUBTAREA */}
       {modalGestion.abierto && (
         <Modal onCerrar={() => setModalGestion(MODAL_GESTION_CERRADO)} labelledBy="titulo-gestion" describedBy="desc-gestion" className={UI.modal}>
-          <div className="flex items-start justify-between gap-4">
-            <div>
+          <div className="flex items-start justify-between gap-3 sm:gap-4">
+            <div className="min-w-0">
               <h2 id="titulo-gestion" className={UI.modalTitulo}>{modalGestion.modo === 'crear' ? 'Agregar subtarea' : 'Editar subtarea'}</h2>
               <p id="desc-gestion" className={UI.modalSubtitulo}>
                 {modalGestion.modo === 'crear' ? 'Añade una nueva subtarea a este evento.' : 'Actualiza los datos de esta subtarea.'}
@@ -1164,7 +1191,7 @@ const DetalleEvento = () => {
             <BotonCerrar onClick={() => setModalGestion(MODAL_GESTION_CERRADO)} />
           </div>
 
-          <form onSubmit={handleGuardarGestion} noValidate className="mt-6 space-y-5">
+          <form onSubmit={handleGuardarGestion} noValidate className="mt-5 sm:mt-6 space-y-4 sm:space-y-5">
             <div>
               <label htmlFor="gestion-descripcion" className={UI.label}>
                 Nombre de la subtarea <Asterisco />
@@ -1175,7 +1202,7 @@ const DetalleEvento = () => {
                 aria-required="true"
                 autoComplete="off"
                 placeholder="Ej. Confirmar servicio de catering"
-                className={`${errGestion.campo === 'descripcion' ? UI.inputError : UI.input} ${FOCO}`}
+                className={`${errGestion.campo === 'descripcion' ? UI.inputError : UI.input} ${CAMPO} ${FOCO}`}
                 value={formGestion.descripcion}
                 {...attrsCampo(errGestion, 'descripcion', 'gestion-descripcion')}
                 onChange={(e) => {
@@ -1187,7 +1214,7 @@ const DetalleEvento = () => {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
+              <div className="min-w-0">
                 <label htmlFor="gestion-plazo" className={UI.label}>Fecha</label>
                 <DateField
                   min={hoyStr}
@@ -1203,7 +1230,7 @@ const DetalleEvento = () => {
                 <MensajeCampo id="gestion-plazo-error" texto={errGestion.campo === 'plazo' ? errGestion.texto : ''} />
               </div>
 
-              <div>
+              <div className="min-w-0">
                 <label htmlFor="gestion-horas" className={UI.label}>
                   Horas estimadas <Asterisco />
                 </label>
@@ -1214,9 +1241,10 @@ const DetalleEvento = () => {
                     step="0.5"
                     min="0.5"
                     max="24"
+                    inputMode="decimal"
                     aria-required="true"
                     placeholder="Ej. 2.5"
-                    className={`${excedeSubtarea || errGestion.campo === 'horas' ? UI.inputError : UI.input} pl-11 ${FOCO}`}
+                    className={`${excedeSubtarea || errGestion.campo === 'horas' ? UI.inputError : UI.input} ${CAMPO} pl-11 ${FOCO}`}
                     value={formGestion.horas_estimadas}
                     {...attrsCampo(errGestion, 'horas', 'gestion-horas', limiteActual > 0 ? 'gestion-horas-ayuda' : undefined)}
                     aria-invalid={excedeSubtarea || errGestion.campo === 'horas' ? 'true' : undefined}
@@ -1231,7 +1259,7 @@ const DetalleEvento = () => {
             </div>
 
             {limiteActual > 0 && (
-              <p id="gestion-horas-ayuda" className={`text-xs font-medium ${excedeSubtarea ? 'text-red-700' : 'text-slate-600'}`}>
+              <p id="gestion-horas-ayuda" className={`text-xs font-medium break-words ${excedeSubtarea ? 'text-red-700' : 'text-slate-600'}`}>
                 {excedeSubtarea
                   ? `Superas el límite: ${horasOtras + horasNuevas} h de ${limiteActual} h. Reduce las horas o aumenta el límite del evento.`
                   : `Disponibles: ${Math.max(limiteActual - horasOtras, 0)} h de ${limiteActual} h.`}
@@ -1240,11 +1268,11 @@ const DetalleEvento = () => {
 
             <MensajeCampo id="gestion-general-error" texto={errGestion.campo === 'general' ? errGestion.texto : ''} />
 
-            <div className="flex justify-end gap-3 pt-5 border-t border-slate-100">
-              <button type="button" onClick={() => setModalGestion(MODAL_GESTION_CERRADO)} className={`${UI.btnSecundario} ${FOCO}`}>
+            <div className={PIE_DIALOGO}>
+              <button type="button" onClick={() => setModalGestion(MODAL_GESTION_CERRADO)} className={`${UI.btnSecundario} ${FOCO} ${BTN_DIALOGO}`}>
                 Cancelar
               </button>
-              <button type="submit" className={`${UI.btnPrimario} ${FOCO}`}>
+              <button type="submit" className={`${UI.btnPrimario} ${FOCO} ${BTN_DIALOGO}`}>
                 {modalGestion.modo === 'crear' ? (
                   <>
                     <Plus className="w-4 h-4" aria-hidden="true" /> Agregar subtarea
