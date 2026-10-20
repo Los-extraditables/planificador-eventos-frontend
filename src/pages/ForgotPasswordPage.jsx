@@ -32,18 +32,20 @@ export const ForgotPasswordPage = () => {
   };
 
   return (
-    <div className="w-full text-left">
-      <h2 className="text-2xl font-bold text-slate-900 mb-1.5 tracking-tight">
+    <div className="w-full text-left flex flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
         Recupera tu contraseña
       </h2>
-      <p className="text-xs sm:text-sm text-slate-500 mb-6 leading-relaxed">
+        <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
         Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.
       </p>
+      </div>
 
       {message && (
         <div
           role="status"
-          className="bg-emerald-50 text-emerald-700 text-xs p-3.5 rounded-xl mb-5 border border-emerald-100 flex items-center gap-2"
+          className="bg-emerald-50 text-emerald-700 text-xs p-3.5 rounded-xl border border-emerald-100 flex items-center gap-2"
         >
           <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-600" />
           <span>{message}</span>
@@ -53,7 +55,7 @@ export const ForgotPasswordPage = () => {
       {error && (
         <div
           role="alert"
-          className="bg-red-50 text-red-600 text-xs p-3.5 rounded-xl mb-5 border border-red-100 flex items-center justify-between gap-2"
+          className="bg-red-50 text-red-600 text-xs p-3.5 rounded-xl border border-red-100 flex items-center justify-between gap-2"
         >
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-500" />
@@ -70,7 +72,7 @@ export const ForgotPasswordPage = () => {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div>
           <label htmlFor="correo-recuperacion" className="block text-xs font-semibold text-slate-700 mb-1.5">
             Correo electrónico
@@ -105,12 +107,12 @@ export const ForgotPasswordPage = () => {
         </button>
       </form>
 
-      <p className="text-xs text-center text-slate-500 mt-6">
+      <div className="text-xs text-center text-slate-500">
         <Link to="/login" className="text-purple-600 font-bold hover:underline inline-flex items-center gap-1">
           <ArrowLeft className="w-3.5 h-3.5" />
           Volver a iniciar sesión
         </Link>
-      </p>
+      </div>
     </div>
   );
 };

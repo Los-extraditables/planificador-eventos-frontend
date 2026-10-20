@@ -40,18 +40,20 @@ export const LoginPage = () => {
   };
 
   return (
-    <div className="w-full text-left">
-      <h2 className="text-2xl font-bold text-slate-900 mb-1.5 tracking-tight">
+    <div className="w-full text-left flex flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
         Iniciar Sesión
       </h2>
-      <p className="text-xs sm:text-sm text-slate-500 mb-6 leading-relaxed">
+        <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
         Bienvenido de nuevo a tu plataforma para organizar eventos.
       </p>
+      </div>
 
       {error && (
         <div
           role="alert"
-          className="bg-red-50 text-red-600 text-xs p-3.5 rounded-xl mb-5 border border-red-100 flex items-center justify-between gap-2"
+          className="bg-red-50 text-red-600 text-xs p-3.5 rounded-xl border border-red-100 flex items-center justify-between gap-2"
         >
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-500" />
@@ -68,7 +70,7 @@ export const LoginPage = () => {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div>
           <label htmlFor="login-usuario" className="block text-xs font-semibold text-slate-700 mb-1.5">
             Correo electrónico o usuario
@@ -152,12 +154,12 @@ export const LoginPage = () => {
         </button>
       </form>
 
-      <p className="text-xs text-center text-slate-500 mt-6">
+      <div className="text-xs text-center text-slate-500">
         ¿No tienes una cuenta?{' '}
         <Link to="/registro" className="text-purple-600 font-bold hover:underline">
           Regístrate gratis
         </Link>
-      </p>
+      </div>
     </div>
   );
 };

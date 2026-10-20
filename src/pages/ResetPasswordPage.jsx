@@ -52,28 +52,30 @@ const ResetPasswordPage = () => {
 
   if (!rawUid || !rawToken) {
     return (
-      <div className="w-full text-left">
-        <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-500 flex items-center justify-center mb-4">
+      <div className="w-full text-left flex flex-col gap-6">
+        <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-500 flex items-center justify-center">
           <AlertCircle className="w-6 h-6" />
         </div>
-        <h2 className="text-2xl font-bold text-slate-900 mb-1.5 tracking-tight">
+        <div className="flex flex-col gap-2">
+        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
           Enlace incompleto o inválido
         </h2>
-        <p className="text-xs sm:text-sm text-slate-500 mb-6 leading-relaxed">
+        <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
           El enlace no contiene los datos necesarios para restablecer tu contraseña. Solicita uno nuevo desde la pantalla de recuperación.
         </p>
+      </div>
         <Link
           to="/forgot-password"
           className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-semibold py-3 rounded-xl text-sm transition shadow-lg shadow-purple-900/15 flex items-center justify-center"
         >
           Solicitar un enlace nuevo
         </Link>
-        <p className="text-xs text-center text-slate-500 mt-6">
+        <div className="text-xs text-center text-slate-500">
           <Link to="/login" className="text-purple-600 font-bold hover:underline inline-flex items-center gap-1">
             <ArrowLeft className="w-3.5 h-3.5" />
             Volver a iniciar sesión
           </Link>
-        </p>
+        </div>
       </div>
     );
   }
@@ -140,18 +142,20 @@ const ResetPasswordPage = () => {
   };
 
   return (
-    <div className="w-full text-left">
-      <h2 className="text-2xl font-bold text-slate-900 mb-1.5 tracking-tight">
+    <div className="w-full text-left flex flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
         Restablecer contraseña
       </h2>
-      <p className="text-xs sm:text-sm text-slate-500 mb-6 leading-relaxed">
+        <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
         Ingresa tu nueva contraseña para actualizar la cuenta.
       </p>
+      </div>
 
       {mensaje.texto && (
         <div
           role={mensaje.tipo === 'exito' ? 'status' : 'alert'}
-          className={`text-xs p-3.5 rounded-xl mb-5 border flex items-center justify-between gap-2 ${
+          className={`text-xs p-3.5 rounded-xl border flex items-center justify-between gap-2 ${
             mensaje.tipo === 'exito'
               ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
               : 'bg-red-50 text-red-600 border-red-100'
@@ -178,7 +182,7 @@ const ResetPasswordPage = () => {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <PasswordField
           id="nueva-password"
           etiqueta="Nueva contraseña"
@@ -215,12 +219,12 @@ const ResetPasswordPage = () => {
         </button>
       </form>
 
-      <p className="text-xs text-center text-slate-500 mt-6">
+      <div className="text-xs text-center text-slate-500">
         <Link to="/login" className="text-purple-600 font-bold hover:underline inline-flex items-center gap-1">
           <ArrowLeft className="w-3.5 h-3.5" />
           Volver a iniciar sesión
         </Link>
-      </p>
+      </div>
     </div>
   );
 };
