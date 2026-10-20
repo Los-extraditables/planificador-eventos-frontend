@@ -332,7 +332,7 @@ const Progreso = () => {
                 </div>
                 <span className="text-xs font-semibold text-slate-500">Eventos mostrados</span>
               </div>
-              <p className="text-3xl font-extrabold text-slate-900 tracking-tight">{eventosCalculados.length}</p>
+              <div className="text-3xl font-extrabold text-slate-900 tracking-tight">{eventosCalculados.length}</div>
             </div>
 
             <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col justify-between space-y-4">
@@ -342,9 +342,9 @@ const Progreso = () => {
                 </div>
                 <span className="text-xs font-semibold text-slate-500">Subtareas completadas</span>
               </div>
-              <p className="text-3xl font-extrabold text-slate-900 tracking-tight">
+              <div className="text-3xl font-extrabold text-slate-900 tracking-tight">
                 {global.completadas} <span className="text-xl text-slate-400 font-medium">/ {global.total}</span>
-              </p>
+              </div>
             </div>
 
             <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col justify-between space-y-3">
@@ -356,7 +356,7 @@ const Progreso = () => {
               </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-3xl font-extrabold text-slate-900 tracking-tight">{global.porcentaje}%</p>
+                  <div className="text-3xl font-extrabold text-slate-900 tracking-tight">{global.porcentaje}%</div>
                   <EtiquetaPospuestas cantidad={global.pospuestas} />
                 </div>
                 <BarraProgreso completadas={global.completadas} total={global.total} titulo="Cumplimiento global" tamano="sm" ocultarCabecera />
@@ -364,7 +364,7 @@ const Progreso = () => {
             </div>
           </div>
 
-          <div className="space-y-4 pt-2">
+          <div className="flex flex-col gap-5 pt-4">
             <h2 className="text-base sm:text-lg font-extrabold text-[#0F172A] tracking-tight">Detalle por evento</h2>
 
             {eventosCalculados.length === 0 ? (
@@ -372,11 +372,11 @@ const Progreso = () => {
                 No hay eventos registrados que coincidan con este filtro.
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="flex flex-col gap-4">
                 {eventosCalculados.map((evento) => (
-                  <div key={evento.id} className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm space-y-4 hover:shadow-md transition-all">
+                  <div key={evento.id} className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col gap-4 hover:shadow-md transition-all">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="space-y-1 min-w-0">
+                      <div className="flex flex-col gap-1.5 min-w-0">
                         <div className="flex items-center gap-2.5 flex-wrap">
                           <h3 className="text-base font-extrabold text-slate-900">{evento.nombre}</h3>
                           <span className="inline-flex items-center px-2 py-0.5 bg-[#F3E8FF] text-[#7E22CE] border border-[#E9D5FF] rounded-full text-[10px] leading-4 font-bold whitespace-nowrap">
