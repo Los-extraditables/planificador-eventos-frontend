@@ -5,7 +5,6 @@ import {
   Calendar,
   CalendarClock,
   Check,
-  CheckCircle2,
   ChevronRight,
   Clock,
   Edit3,
@@ -17,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { Aviso, EncabezadoPagina, PantallaCarga, UI, formatearFechaDisplay, limpiarFecha } from '../components/ui';
 import { authService } from '../services/authService';
 
 /* ============================== API ============================== */
@@ -52,23 +52,10 @@ const request = async (ruta, { method = 'GET', body } = {}) => {
 /* ============================ Utilidades ============================ */
 const NOTA_POR_DEFECTO = 'Pospuesto sin nota';
 
-const limpiarFecha = (f) => (f || '').toString().split('T')[0].split(' ')[0];
-
 const fechaOffsetStr = (dias = 0) => {
   const d = new Date();
   d.setDate(d.getDate() + dias);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
-
-const formatearFechaDisplay = (valor) => {
-  const p = limpiarFecha(valor).split('-');
-  return p.length < 3 ? limpiarFecha(valor) : `${p[2]}/${p[1]}/${p[0]}`;
-};
-
-const formatearFechaCorta = (valor) => {
-  const [y, m, d] = limpiarFecha(valor).split('-').map(Number);
-  if (!y || !m || !d) return limpiarFecha(valor);
-  return new Date(y, m - 1, d).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
 const gestionesDe = (ev) => ev?.gestiones || ev?.gestiones_plan || [];
@@ -105,7 +92,7 @@ const armarCambio = (accion, { fecha, nota } = {}) => {
   };
 };
 
-/* ===================== Etiqueta de pospuestas (igual que en Progreso) ===================== */
+/* ===================== Etiqueta de pospuestas (igual que en Hoy y Progreso) ===================== */
 const EtiquetaPospuestas = ({ cantidad, texto }) => {
   if (!cantidad && !texto) return null;
   return (
@@ -115,22 +102,24 @@ const EtiquetaPospuestas = ({ cantidad, texto }) => {
   );
 };
 
-/* ========================= Barra de progreso ========================= */
+/* ========================= Barra de progreso (igual que en Progreso) ========================= */
 const ALTURAS = { sm: 'h-2', md: 'h-2.5', lg: 'h-3' };
 
-const BarraProgreso = ({ completadas, total, pospuestas = 0, titulo, tamano = 'md', ocultarTitulo = false, className = '' }) => {
+const BarraProgreso = ({ completadas, total, pospuestas = 0, titulo, tamano = 'md', ocultarTitulo = false, ocultarCabecera = false, className = '' }) => {
   const porcentaje = total > 0 ? Math.round((completadas / total) * 100) : 0;
   return (
     <div className={`space-y-1.5 ${className}`}>
-      <div className="flex items-center justify-between gap-3 text-xs font-bold text-slate-600">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className={ocultarTitulo ? 'sr-only' : ''}>{titulo}</span>
-          <EtiquetaPospuestas cantidad={pospuestas} />
+      {!ocultarCabecera && (
+        <div className="flex items-center justify-between gap-3 text-xs font-bold text-slate-600">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className={ocultarTitulo ? 'sr-only' : ''}>{titulo}</span>
+            <EtiquetaPospuestas cantidad={pospuestas} />
+          </div>
+          <span className="text-slate-900 font-extrabold ml-auto">
+            {completadas}/{total} subtareas <span className="text-purple-700 ml-1">{porcentaje}%</span>
+          </span>
         </div>
-        <span className="text-slate-900 font-extrabold ml-auto">
-          {completadas}/{total} subtareas <span className="text-purple-700 ml-1">{porcentaje}%</span>
-        </span>
-      </div>
+      )}
       <div
         role="progressbar"
         aria-label={titulo}
@@ -146,7 +135,7 @@ const BarraProgreso = ({ completadas, total, pospuestas = 0, titulo, tamano = 'm
   );
 };
 
-/* ===================== Control Hecha / Posponer ===================== */
+/* ===================== Control Hecha / Posponer (igual que en Hoy) ===================== */
 const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
   const [abierto, setAbierto] = useState(false);
   const [form, setForm] = useState({ fecha: '', nota: '' });
@@ -197,9 +186,7 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
           disabled={guardando}
           aria-pressed={completada}
           title={completada ? 'Marcar como pendiente' : 'Marcar como hecha'}
-          className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-60 disabled:cursor-wait ${
-            completada ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200' : 'bg-purple-800 hover:bg-purple-900 text-white'
-          }`}
+          className={`${UI.btnHecha} ${completada ? UI.btnHechaListo : UI.btnHechaPendiente}`}
         >
           <Check className="w-3.5 h-3.5" />
           <span>{completada ? 'Completada' : 'Hecha'}</span>
@@ -215,7 +202,7 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
             }}
             disabled={guardando}
             title="Posponer subtarea"
-            className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-amber-800 hover:bg-amber-50 border border-slate-200 hover:border-amber-300 rounded-xl transition cursor-pointer disabled:opacity-60"
+            className={UI.btnPosponer}
           >
             Posponer
           </button>
@@ -224,15 +211,15 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
 
       {abierto && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onMouseDown={(e) => e.target === e.currentTarget && cerrar()}>
-          <div role="dialog" aria-modal="true" aria-labelledby="titulo-posponer" className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-xl shadow-2xl border border-slate-100 text-left">
+          <div role="dialog" aria-modal="true" aria-labelledby="titulo-posponer" className={UI.modal}>
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-4 min-w-0">
                 <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
                   <CalendarClock className="w-6 h-6" />
                 </div>
                 <div className="min-w-0">
-                  <h3 id="titulo-posponer" className="text-2xl font-semibold text-[#1e2b4d]">Posponer subtarea</h3>
-                  <p className="text-sm text-slate-500 mt-1 truncate">{gestion.descripcion}</p>
+                  <h3 id="titulo-posponer" className={UI.modalTitulo}>Posponer subtarea</h3>
+                  <p className={`${UI.modalSubtitulo} truncate`}>{gestion.descripcion}</p>
                 </div>
               </div>
               <button type="button" onClick={cerrar} className="p-1 text-slate-400 hover:text-slate-600 transition cursor-pointer" aria-label="Cerrar">
@@ -242,7 +229,7 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
 
             <form onSubmit={confirmarPosponer} className="mt-6 space-y-5">
               <div>
-                <label htmlFor="posponer-fecha" className="block text-sm font-medium text-slate-700 mb-2">
+                <label htmlFor="posponer-fecha" className={UI.label}>
                   Nueva fecha <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
@@ -258,17 +245,15 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
                       setForm({ ...form, fecha: e.target.value });
                       setErrorFecha('');
                     }}
-                    className={`w-full pl-11 pr-4 py-3.5 border rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 transition ${
-                      errorFecha ? 'bg-red-50/70 border-red-400 focus:ring-red-400' : 'bg-white border-slate-200 focus:ring-amber-500 focus:border-amber-500'
-                    }`}
+                    className={`${errorFecha ? UI.inputError : UI.input} pl-11`}
                   />
                 </div>
-                {errorFecha && <p className="text-xs text-red-600 mt-2 font-medium">{errorFecha}</p>}
+                {errorFecha && <p className={UI.error}>{errorFecha}</p>}
                 {maxFecha && !errorFecha && <p className="text-[11px] text-slate-400 mt-1.5">Puedes elegir hasta la fecha límite del evento.</p>}
               </div>
 
               <div>
-                <label htmlFor="posponer-nota" className="block text-sm font-medium text-slate-700 mb-2">
+                <label htmlFor="posponer-nota" className={UI.label}>
                   Nota <span className="text-slate-400 font-normal">(opcional)</span>
                 </label>
                 <textarea
@@ -278,16 +263,16 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
                   placeholder="Ej. Esperando respuesta del proveedor"
                   value={form.nota}
                   onChange={(e) => setForm({ ...form, nota: e.target.value })}
-                  className="w-full px-4 py-3.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition resize-none"
+                  className={`${UI.input} resize-none`}
                 />
                 <p className="text-[11px] text-slate-400 mt-1 text-right">{form.nota.length}/300</p>
               </div>
 
               <div className="flex justify-end gap-3 pt-5 border-t border-slate-100">
-                <button type="button" onClick={cerrar} className="px-6 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium text-sm rounded-xl transition cursor-pointer">
+                <button type="button" onClick={cerrar} className={UI.btnSecundario}>
                   Cancelar
                 </button>
-                <button type="submit" className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm rounded-xl shadow-sm transition cursor-pointer">
+                <button type="submit" className={UI.btnPrimario}>
                   Posponer
                 </button>
               </div>
@@ -327,13 +312,13 @@ const DateField = ({ value, onChange, min, max, placeholder, required }) => {
           }, 0);
         }}
         onBlur={() => setEnfocado(false)}
-        className="w-full pl-11 pr-4 py-3.5 border rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition [&::-webkit-calendar-picker-indicator]:hidden bg-white border-slate-200 focus:ring-purple-600 focus:border-purple-600"
+        className={`${UI.input} pl-11 [&::-webkit-calendar-picker-indicator]:hidden`}
       />
     </div>
   );
 };
 
-/* ===================== Modal de confirmación de eliminación ===================== */
+/* ===================== Modal de confirmación de eliminación (igual que en Progreso) ===================== */
 const ModalConfirmarEliminar = ({ titulo, descripcion, eliminando, onConfirmar, onCancelar }) => {
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && !eliminando && onCancelar();
@@ -358,27 +343,16 @@ const ModalConfirmarEliminar = ({ titulo, descripcion, eliminando, onConfirmar, 
             <AlertTriangle className="w-6 h-6" />
           </div>
           <div className="min-w-0">
-            <h3 id="titulo-eliminar" className="text-xl font-semibold text-[#1e2b4d]">{titulo}</h3>
-            <p id="desc-eliminar" className="text-sm text-slate-500 mt-1.5 leading-relaxed">{descripcion}</p>
+            <h3 id="titulo-eliminar" className={UI.modalTitulo}>{titulo}</h3>
+            <p id="desc-eliminar" className={`${UI.modalSubtitulo} leading-relaxed`}>{descripcion}</p>
           </div>
         </div>
 
         <div className="flex justify-end gap-3 pt-6 mt-6 border-t border-slate-100">
-          <button
-            type="button"
-            onClick={onCancelar}
-            disabled={eliminando}
-            autoFocus
-            className="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium text-sm rounded-xl transition cursor-pointer disabled:opacity-60"
-          >
+          <button type="button" onClick={onCancelar} disabled={eliminando} autoFocus className={UI.btnSecundario}>
             Cancelar
           </button>
-          <button
-            type="button"
-            onClick={onConfirmar}
-            disabled={eliminando}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold text-sm rounded-xl shadow-sm transition cursor-pointer disabled:opacity-60 disabled:cursor-wait"
-          >
+          <button type="button" onClick={onConfirmar} disabled={eliminando} className={UI.btnPeligro}>
             <Trash2 className="w-4 h-4" />
             {eliminando ? 'Eliminando...' : 'Eliminar'}
           </button>
@@ -510,7 +484,7 @@ const DetalleEvento = () => {
 
       enVuelo.current -= 1;
       if (enVuelo.current === 0) cargar(true);
-      if (accion === 'pospuesto') mostrarMensaje('exito', `Subtarea pospuesta al ${formatearFechaCorta(datos.fecha)}.`);
+      if (accion === 'pospuesto') mostrarMensaje('exito', `Subtarea pospuesta al ${formatearFechaDisplay(datos.fecha)}.`);
       return { ok: true };
     } catch (err) {
       enVuelo.current -= 1;
@@ -687,41 +661,27 @@ const DetalleEvento = () => {
   /* --------------------------- Estados de pantalla --------------------------- */
   if (cargando && !cargado) {
     return (
-      <div className="max-w-5xl mx-auto p-4 sm:p-6 md:p-8 font-sans text-slate-800 text-left bg-slate-50/50 min-h-screen">
-        <div className="py-12 px-4 flex flex-col items-center justify-center space-y-8" role="status" aria-live="polite">
-          <div className="flex flex-col items-center text-center space-y-3">
-            <div className="w-16 h-16 rounded-2xl bg-[#F3E5F5] flex items-center justify-center text-[#7B1FA2]">
-              <CalendarClock className="w-8 h-8 animate-pulse" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-lg font-extrabold text-slate-900 tracking-tight">Cargando detalles de eventos</h3>
-              <p className="text-sm text-slate-500 max-w-sm">Organizamos la información. Tomará solo un momento.</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-3 animate-pulse">
-                <div className="h-4 bg-slate-200 rounded-full w-3/4"></div>
-                <div className="h-3 bg-slate-100 rounded-full w-1/2"></div>
-              </div>
-            ))}
-          </div>
-        </div>
+      <div className={UI.pagina}>
+        <PantallaCarga
+          icono={CalendarClock}
+          titulo="Cargando detalles de eventos"
+          texto="Organizamos la información. Tomará solo un momento."
+        />
       </div>
     );
   }
 
   if (!cargado || eventos.length === 0) {
     return (
-      <div className="max-w-5xl mx-auto p-6 font-sans text-slate-800 text-left">
-        <button onClick={() => navigate('/hoy')} className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 mb-6 transition cursor-pointer">
+      <div className={UI.pagina}>
+        <button onClick={() => navigate('/hoy')} className={`inline-flex items-center gap-1.5 w-fit ${UI.btnEnlace}`}>
           <ArrowLeft className="w-4 h-4" /> Volver a Hoy
         </button>
-        <div className="p-5 bg-red-50 text-red-700 border border-red-200 rounded-2xl text-sm mb-4 flex items-center gap-3">
+        <div className="p-5 bg-red-50 text-red-700 border border-red-200 rounded-2xl text-sm flex items-center gap-3">
           <AlertCircle className="w-5 h-5 flex-shrink-0" />
           <span>{error || 'No hay eventos disponibles para mostrar. Crea un evento nuevo.'}</span>
         </div>
-        <button onClick={() => cargar()} className="px-5 py-2.5 bg-[#7E22CE] hover:bg-[#6B21A8] text-white font-bold text-xs rounded-xl shadow-sm transition cursor-pointer">
+        <button onClick={() => cargar()} className={UI.btnPrimario}>
           Reintentar cargar
         </button>
       </div>
@@ -741,117 +701,95 @@ const DetalleEvento = () => {
   const limiteMuyBajo = !isNaN(nuevoLimiteForm) && nuevoLimiteForm < horasSubtareasTotal;
 
   return (
-    <div className="max-w-5xl mx-auto p-4 sm:p-6 md:p-8 font-sans text-slate-800 text-left bg-slate-50/50 min-h-screen space-y-6">
-      {mensaje.texto && (
-        <div
-          role="alert"
-          className={`fixed top-5 right-5 z-[60] max-w-sm flex items-start gap-2.5 px-5 py-4 rounded-2xl shadow-lg text-sm font-semibold text-white transition-all ${
-            mensaje.tipo === 'exito' ? 'bg-emerald-600' : 'bg-red-600'
-          }`}
-        >
-          {mensaje.tipo === 'exito' ? <CheckCircle2 className="w-5 h-5 shrink-0" /> : <AlertCircle className="w-5 h-5 shrink-0" />}
-          <span>{mensaje.texto}</span>
+    <div className={UI.pagina}>
+      {mensaje.texto && <Aviso tipo={mensaje.tipo} texto={mensaje.texto} />}
+
+      <button onClick={() => navigate('/hoy')} className={`inline-flex items-center gap-1.5 w-fit -mb-2 ${UI.btnEnlace}`}>
+        <ArrowLeft className="w-4 h-4" /> Volver a Hoy
+      </button>
+
+      <EncabezadoPagina
+        titulo={seleccion === 'todos' ? 'Lista general de eventos' : eventoActivo.nombre}
+        subtitulo={seleccion === 'todos' ? 'Selecciona cualquier evento para ver sus subtareas y detalles completos.' : undefined}
+      >
+        <div className={UI.filtro}>
+          <SlidersHorizontal className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          <select
+            value={seleccion}
+            onChange={(e) => setEventoSeleccionadoId(e.target.value)}
+            aria-label="Seleccionar evento"
+            className={UI.filtroSelect}
+          >
+            <option value="todos">Todos los eventos</option>
+            {eventos.map((e) => (
+              <option key={e.id} value={e.id}>{e.nombre}</option>
+            ))}
+          </select>
         </div>
-      )}
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <button onClick={() => navigate('/hoy')} className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition cursor-pointer w-fit">
-          <ArrowLeft className="w-4 h-4" /> Volver a Hoy
-        </button>
-
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2 bg-white border border-slate-200/90 rounded-xl px-3 py-2 shadow-sm">
-            <SlidersHorizontal className="w-4 h-4 text-slate-400 flex-shrink-0" />
-            <select
-              value={seleccion}
-              onChange={(e) => setEventoSeleccionadoId(e.target.value)}
-              aria-label="Seleccionar evento"
-              className="bg-transparent text-slate-800 text-xs sm:text-sm font-semibold focus:outline-none cursor-pointer"
-            >
-              <option value="todos">Todos los eventos</option>
-              {eventos.map((e) => (
-                <option key={e.id} value={e.id}>{e.nombre}</option>
-              ))}
-            </select>
-          </div>
-
-          {eventoActivo && (
-            <button
-              onClick={handleAbrirEditarEvento}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:border-purple-300 text-slate-700 hover:text-purple-800 font-semibold text-xs sm:text-sm rounded-xl transition shadow-sm cursor-pointer"
-            >
-              <Edit3 className="w-4 h-4 text-purple-600" /> Editar evento
-            </button>
-          )}
-        </div>
-      </div>
+        {eventoActivo && (
+          <button onClick={handleAbrirEditarEvento} className={UI.btnSecundarioSm}>
+            <Edit3 className="w-4 h-4 text-purple-600" /> Editar evento
+          </button>
+        )}
+      </EncabezadoPagina>
 
       {seleccion === 'todos' ? (
-        <div className="space-y-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Lista general de eventos</h1>
-            <p className="text-xs sm:text-sm text-slate-500 mt-1">Selecciona cualquier evento para ver sus subtareas y detalles completos.</p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 pt-2">
-            {eventos.map((ev) => {
-              const p = calcularProgreso(gestionesDe(ev));
-              return (
-                <div
-                  key={ev.id}
-                  onClick={() => setEventoSeleccionadoId(String(ev.id))}
-                  className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
-                >
-                  <div className="space-y-1.5 min-w-0">
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                      <h3 className="text-base font-extrabold text-slate-900 group-hover:text-[#7E22CE] transition">{ev.nombre}</h3>
-                      <EtiquetaPospuestas cantidad={p.pospuestas} />
-                    </div>
-                    <p className="text-xs text-slate-500 font-medium">
-                      {ev.tipo || ev.categoria || 'Evento'} • Límite: {ev.fecha ? formatearFechaDisplay(ev.fecha) : 'Sin fecha'}
-                    </p>
+        <div className="grid grid-cols-1 gap-4">
+          {eventos.map((ev) => {
+            const p = calcularProgreso(gestionesDe(ev));
+            return (
+              <div
+                key={ev.id}
+                onClick={() => setEventoSeleccionadoId(String(ev.id))}
+                className={`${UI.tarjeta} hover:shadow-md transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 group`}
+              >
+                <div className="space-y-1.5 min-w-0">
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <h3 className="text-base font-extrabold text-slate-900 group-hover:text-[#7E22CE] transition">{ev.nombre}</h3>
+                    <EtiquetaPospuestas cantidad={p.pospuestas} />
                   </div>
-
-                  <div className="flex items-center gap-6 justify-between sm:justify-end">
-                    <BarraProgreso completadas={p.completadas} total={p.total} titulo={`Progreso de ${ev.nombre}`} ocultarTitulo tamano="sm" className="w-full sm:w-52" />
-                    <span className="inline-flex items-center gap-1 text-xs font-bold text-[#7E22CE] bg-purple-50 group-hover:bg-[#7E22CE] group-hover:text-white px-3.5 py-2 rounded-xl transition whitespace-nowrap">
-                      Ver detalle <ChevronRight className="w-3.5 h-3.5" />
-                    </span>
-                  </div>
+                  <p className="text-xs text-slate-500 font-medium">
+                    {ev.tipo || ev.categoria || 'Evento'} • Límite: {ev.fecha ? formatearFechaDisplay(ev.fecha) : 'Sin fecha'}
+                  </p>
                 </div>
-              );
-            })}
-          </div>
+
+                <div className="flex items-center gap-6 justify-between sm:justify-end">
+                  <BarraProgreso completadas={p.completadas} total={p.total} titulo={`Progreso de ${ev.nombre}`} ocultarTitulo tamano="sm" className="w-full sm:w-52" />
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-[#7E22CE] bg-purple-50 group-hover:bg-[#7E22CE] group-hover:text-white px-3.5 py-2 rounded-xl transition whitespace-nowrap">
+                    Ver detalle <ChevronRight className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : (
         <>
-          <div className="space-y-3">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{eventoActivo.nombre}</h1>
-            <div className="flex flex-wrap items-center gap-2.5">
-              <span className="px-3 py-1 bg-[#F3E8FF] text-[#7E22CE] border border-[#E9D5FF] rounded-full text-xs font-bold">{eventoActivo.estado || 'En preparación'}</span>
-              <span className="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded-full text-xs font-bold">{eventoActivo.tipo || eventoActivo.categoria || 'Evento'}</span>
-              <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 bg-white border border-slate-200 px-3 py-1 rounded-full">
-                <Calendar className="w-3.5 h-3.5 text-slate-400" /> Límite: {eventoActivo.fecha ? formatearFechaDisplay(eventoActivo.fecha) : 'Sin fecha'}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="px-3 py-1 bg-[#F3E8FF] text-[#7E22CE] border border-[#E9D5FF] rounded-full text-xs font-bold">{eventoActivo.estado || 'En preparación'}</span>
+            <span className="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded-full text-xs font-bold">{eventoActivo.tipo || eventoActivo.categoria || 'Evento'}</span>
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 bg-white border border-slate-200 px-3 py-1 rounded-full">
+              <Calendar className="w-3.5 h-3.5 text-slate-400" /> Límite: {eventoActivo.fecha ? formatearFechaDisplay(eventoActivo.fecha) : 'Sin fecha'}
+            </span>
+            {eventoActivo.limite_diario_horas && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-100 px-3 py-1 rounded-full">
+                <Clock className="w-3.5 h-3.5 text-purple-600" /> Máx. {eventoActivo.limite_diario_horas} h (total)
               </span>
-              {eventoActivo.limite_diario_horas && (
-                <span className="inline-flex items-center gap-1 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-100 px-3 py-1 rounded-full">
-                  <Clock className="w-3.5 h-3.5 text-purple-600" /> Máx. {eventoActivo.limite_diario_horas} hrs (total)
-                </span>
-              )}
-            </div>
+            )}
           </div>
 
           {/* Se actualiza al instante al marcar Hecha o Pospuesta */}
-          <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm">
+          <div className={UI.tarjeta}>
             <BarraProgreso completadas={progreso.completadas} total={progreso.total} pospuestas={progreso.pospuestas} titulo="Progreso del evento" tamano="lg" />
           </div>
 
-          <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm space-y-5">
+          <div className={`${UI.tarjeta} space-y-5`}>
             <div className="flex justify-between items-center pb-4 border-b border-slate-100">
-              <h2 className="text-base sm:text-lg font-bold text-slate-900">Subtareas</h2>
+              <h2 className={UI.h2}>Subtareas</h2>
               <div className="flex items-center gap-3">
                 <span className="text-xs font-semibold text-slate-400 hidden sm:inline">{progreso.total} subtareas</span>
-                <button onClick={handleAbrirCrear} className="inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-purple-300 hover:bg-purple-50 text-purple-700 font-bold text-xs sm:text-sm rounded-xl transition shadow-sm cursor-pointer">
+                <button onClick={handleAbrirCrear} className={UI.btnAgregarSm}>
                   <Plus className="w-4 h-4" /> Agregar subtarea
                 </button>
               </div>
@@ -898,7 +836,7 @@ const DetalleEvento = () => {
                           )}
                           {sub.horas_estimadas !== undefined && sub.horas_estimadas !== null && (
                             <span className="inline-flex items-center gap-1 text-xs text-slate-500 font-medium">
-                              <Clock className="w-3.5 h-3.5 text-slate-400" /> {sub.horas_estimadas} hrs
+                              <Clock className="w-3.5 h-3.5 text-slate-400" /> {sub.horas_estimadas} h
                             </span>
                           )}
 
@@ -949,11 +887,11 @@ const DetalleEvento = () => {
       {/* MODAL: EDITAR EVENTO */}
       {modalEvento && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div role="dialog" aria-modal="true" className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-xl shadow-2xl border border-slate-100 text-left">
+          <div role="dialog" aria-modal="true" className={UI.modal}>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-2xl font-semibold text-[#1e2b4d]">Editar evento</h3>
-                <p className="text-sm text-slate-500 mt-1">Actualiza los datos generales y la capacidad diaria de trabajo.</p>
+                <h3 className={UI.modalTitulo}>Editar evento</h3>
+                <p className={UI.modalSubtitulo}>Actualiza los datos generales y la capacidad diaria de trabajo.</p>
               </div>
               <button type="button" onClick={() => setModalEvento(false)} className="p-1 text-slate-400 hover:text-slate-600 transition cursor-pointer" aria-label="Cerrar">
                 <X className="w-5 h-5" />
@@ -962,11 +900,11 @@ const DetalleEvento = () => {
 
             <form onSubmit={handleGuardarEvento} className="mt-6 space-y-5">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Nombre del evento</label>
+                <label className={UI.label}>Nombre del evento</label>
                 <input
                   type="text"
                   required
-                  className="w-full px-4 py-3.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-purple-600 transition"
+                  className={UI.input}
                   value={formEvento.nombre}
                   onChange={(e) => setFormEvento({ ...formEvento, nombre: e.target.value })}
                 />
@@ -974,9 +912,9 @@ const DetalleEvento = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Tipo de evento</label>
+                  <label className={UI.label}>Tipo de evento</label>
                   <select
-                    className="w-full px-4 py-3.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-purple-600 transition cursor-pointer"
+                    className={`${UI.input} cursor-pointer`}
                     value={formEvento.tipo}
                     onChange={(e) => setFormEvento({ ...formEvento, tipo: e.target.value })}
                   >
@@ -989,13 +927,13 @@ const DetalleEvento = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Fecha límite</label>
+                  <label className={UI.label}>Fecha límite</label>
                   <DateField required min={hoyStr} placeholder="Ej. 20/09/2026" value={formEvento.fecha} onChange={(e) => setFormEvento({ ...formEvento, fecha: e.target.value })} />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Máximo de horas por día</label>
+                <label className={UI.label}>Máximo de horas por día</label>
                 <div className="relative">
                   <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                   <input
@@ -1005,26 +943,24 @@ const DetalleEvento = () => {
                     max="24"
                     required
                     placeholder="Ej. 6"
-                    className={`w-full pl-11 pr-24 py-3.5 border rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition ${
-                      limiteMuyBajo ? 'bg-red-50/70 border-red-400 focus:ring-red-400' : 'bg-white border-slate-200 focus:ring-purple-600 focus:border-purple-600'
-                    }`}
+                    className={`${limiteMuyBajo ? UI.inputError : UI.input} pl-11 pr-24`}
                     value={formEvento.limite_diario_horas}
                     onChange={(e) => setFormEvento({ ...formEvento, limite_diario_horas: e.target.value })}
                   />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400 pointer-events-none">horas/día</span>
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400 pointer-events-none">h/día</span>
                 </div>
                 {limiteMuyBajo && (
-                  <p className="text-xs text-red-600 mt-2 font-medium">
+                  <p className={UI.error}>
                     Tus subtareas ya suman {horasSubtareasTotal} h. Reduce o elimina subtareas, o usa un límite de {horasSubtareasTotal} h o más.
                   </p>
                 )}
               </div>
 
               <div className="flex justify-end gap-3 pt-5 border-t border-slate-100">
-                <button type="button" onClick={() => setModalEvento(false)} className="px-6 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium text-sm rounded-xl transition cursor-pointer">
+                <button type="button" onClick={() => setModalEvento(false)} className={UI.btnSecundario}>
                   Cancelar
                 </button>
-                <button type="submit" className="px-6 py-3 bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-semibold text-sm rounded-xl shadow-sm transition cursor-pointer">
+                <button type="submit" className={UI.btnPrimario}>
                   Guardar cambios
                 </button>
               </div>
@@ -1036,11 +972,11 @@ const DetalleEvento = () => {
       {/* MODAL: CREAR / EDITAR SUBTAREA */}
       {modalGestion.abierto && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div role="dialog" aria-modal="true" className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-xl shadow-2xl border border-slate-100 text-left">
+          <div role="dialog" aria-modal="true" className={UI.modal}>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-2xl font-semibold text-[#1e2b4d]">{modalGestion.modo === 'crear' ? 'Agregar subtarea' : 'Editar subtarea'}</h3>
-                <p className="text-sm text-slate-500 mt-1">
+                <h3 className={UI.modalTitulo}>{modalGestion.modo === 'crear' ? 'Agregar subtarea' : 'Editar subtarea'}</h3>
+                <p className={UI.modalSubtitulo}>
                   {modalGestion.modo === 'crear' ? 'Añade una nueva subtarea a este evento.' : 'Actualiza los datos de esta subtarea.'}
                 </p>
               </div>
@@ -1051,13 +987,13 @@ const DetalleEvento = () => {
 
             <form onSubmit={handleGuardarGestion} className="mt-6 space-y-5">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Nombre de la subtarea</label>
+                <label className={UI.label}>Nombre de la subtarea</label>
                 <input
                   type="text"
                   required
                   autoFocus
                   placeholder="Ej. Confirmar servicio de catering"
-                  className="w-full px-4 py-3.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-purple-600 transition"
+                  className={UI.input}
                   value={formGestion.descripcion}
                   onChange={(e) => setFormGestion({ ...formGestion, descripcion: e.target.value })}
                 />
@@ -1065,12 +1001,12 @@ const DetalleEvento = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Fecha</label>
+                  <label className={UI.label}>Fecha</label>
                   <DateField min={hoyStr} max={limpiarFecha(eventoActivo?.fecha) || undefined} placeholder="Ej. 20/09/2026" value={formGestion.plazo} onChange={(e) => setFormGestion({ ...formGestion, plazo: e.target.value })} />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Horas estimadas</label>
+                  <label className={UI.label}>Horas estimadas</label>
                   <div className="relative">
                     <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                     <input
@@ -1080,9 +1016,7 @@ const DetalleEvento = () => {
                       max="24"
                       required
                       placeholder="Ej. 2.5"
-                      className={`w-full pl-11 pr-4 py-3.5 border rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition ${
-                        excedeSubtarea ? 'bg-red-50/70 border-red-400 focus:ring-red-400' : 'bg-white border-slate-200 focus:ring-purple-600 focus:border-purple-600'
-                      }`}
+                      className={`${excedeSubtarea ? UI.inputError : UI.input} pl-11`}
                       value={formGestion.horas_estimadas}
                       onChange={(e) => setFormGestion({ ...formGestion, horas_estimadas: e.target.value })}
                     />
@@ -1099,10 +1033,10 @@ const DetalleEvento = () => {
               )}
 
               <div className="flex justify-end gap-3 pt-5 border-t border-slate-100">
-                <button type="button" onClick={() => setModalGestion(MODAL_GESTION_CERRADO)} className="px-6 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium text-sm rounded-xl transition cursor-pointer">
+                <button type="button" onClick={() => setModalGestion(MODAL_GESTION_CERRADO)} className={UI.btnSecundario}>
                   Cancelar
                 </button>
-                <button type="submit" className="inline-flex items-center gap-1.5 px-6 py-3 bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-semibold text-sm rounded-xl shadow-sm transition cursor-pointer">
+                <button type="submit" className={UI.btnPrimario}>
                   {modalGestion.modo === 'crear' ? (
                     <>
                       <Plus className="w-4 h-4" /> Agregar subtarea

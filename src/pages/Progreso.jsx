@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Aviso, EncabezadoPagina, PantallaCarga, UI } from '../components/ui';
 import { authService } from '../services/authService';
 
 /* ============================== API ============================== */
@@ -49,17 +50,17 @@ const calcularProgreso = (gestiones = []) => {
   };
 };
 
-/* ===================== Etiqueta de pospuestas (igual que en detalle) ===================== */
-const EtiquetaPospuestas = ({ cantidad }) => {
-  if (!cantidad) return null;
+/* ===================== Etiqueta de pospuestas (igual que en Hoy y Detalle) ===================== */
+const EtiquetaPospuestas = ({ cantidad, texto }) => {
+  if (!cantidad && !texto) return null;
   return (
     <span className="inline-flex items-center bg-amber-100 text-amber-800 border border-amber-200 text-[10px] leading-4 font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
-      {cantidad} {cantidad === 1 ? 'pospuesta' : 'pospuestas'}
+      {texto || `${cantidad} ${cantidad === 1 ? 'pospuesta' : 'pospuestas'}`}
     </span>
   );
 };
 
-/* ========================= Barra de progreso ========================= */
+/* ========================= Barra de progreso (igual que en Detalle) ========================= */
 const ALTURAS = { sm: 'h-2', md: 'h-2.5', lg: 'h-3' };
 
 const BarraProgreso = ({ completadas, total, pospuestas = 0, titulo, tamano = 'md', ocultarTitulo = false, ocultarCabecera = false, className = '' }) => {
@@ -68,7 +69,10 @@ const BarraProgreso = ({ completadas, total, pospuestas = 0, titulo, tamano = 'm
     <div className={`space-y-1.5 ${className}`}>
       {!ocultarCabecera && (
         <div className="flex items-center justify-between gap-3 text-xs font-bold text-slate-600">
-          <span className={ocultarTitulo ? 'sr-only' : ''}>{titulo}</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className={ocultarTitulo ? 'sr-only' : ''}>{titulo}</span>
+            <EtiquetaPospuestas cantidad={pospuestas} />
+          </div>
           <span className="text-slate-900 font-extrabold ml-auto">
             {completadas}/{total} subtareas <span className="text-purple-700 ml-1">{porcentaje}%</span>
           </span>
@@ -85,16 +89,11 @@ const BarraProgreso = ({ completadas, total, pospuestas = 0, titulo, tamano = 'm
       >
         <div className="h-full bg-[#7E22CE] rounded-full transition-all duration-500 motion-reduce:transition-none" style={{ width: `${porcentaje}%` }} />
       </div>
-      {pospuestas > 0 && (
-        <div className="flex justify-end pt-1">
-          <EtiquetaPospuestas cantidad={pospuestas} />
-        </div>
-      )}
     </div>
   );
 };
 
-/* ===================== Modal de confirmación de eliminación ===================== */
+/* ===================== Modal de confirmación de eliminación (igual que en Detalle) ===================== */
 const ModalConfirmarEliminar = ({ titulo, descripcion, eliminando, onConfirmar, onCancelar }) => {
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && !eliminando && onCancelar();
@@ -119,27 +118,16 @@ const ModalConfirmarEliminar = ({ titulo, descripcion, eliminando, onConfirmar, 
             <AlertTriangle className="w-6 h-6" />
           </div>
           <div className="min-w-0">
-            <h3 id="titulo-eliminar" className="text-xl font-semibold text-[#1e2b4d]">{titulo}</h3>
-            <p id="desc-eliminar" className="text-sm text-slate-500 mt-1.5 leading-relaxed">{descripcion}</p>
+            <h3 id="titulo-eliminar" className={UI.modalTitulo}>{titulo}</h3>
+            <p id="desc-eliminar" className={`${UI.modalSubtitulo} leading-relaxed`}>{descripcion}</p>
           </div>
         </div>
 
         <div className="flex justify-end gap-3 pt-6 mt-6 border-t border-slate-100">
-          <button
-            type="button"
-            onClick={onCancelar}
-            disabled={eliminando}
-            autoFocus
-            className="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium text-sm rounded-xl transition cursor-pointer disabled:opacity-60"
-          >
+          <button type="button" onClick={onCancelar} disabled={eliminando} autoFocus className={UI.btnSecundario}>
             Cancelar
           </button>
-          <button
-            type="button"
-            onClick={onConfirmar}
-            disabled={eliminando}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold text-sm rounded-xl shadow-sm transition cursor-pointer disabled:opacity-60 disabled:cursor-wait"
-          >
+          <button type="button" onClick={onConfirmar} disabled={eliminando} className={UI.btnPeligro}>
             <Trash2 className="w-4 h-4" />
             {eliminando ? 'Eliminando...' : 'Eliminar'}
           </button>
@@ -250,43 +238,15 @@ const Progreso = () => {
   );
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-6xl mx-auto space-y-6 bg-slate-50/50 min-h-screen text-slate-800 text-left font-sans">
-      {mensaje.texto && (
-        <div
-          role="status"
-          className={`p-4 rounded-2xl text-sm font-semibold flex items-center gap-2.5 shadow-sm transition-all ${
-            mensaje.tipo === 'exito' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'
-          }`}
-        >
-          {mensaje.tipo === 'exito' ? (
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-          ) : (
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-          )}
-          <span>{mensaje.texto}</span>
-        </div>
-      )}
+    <div className={UI.pagina}>
+      {mensaje.texto && <Aviso tipo={mensaje.tipo} texto={mensaje.texto} />}
 
       {cargando && (
-        <div className="py-16 px-4 flex flex-col items-center justify-center space-y-8" role="status" aria-live="polite">
-          <div className="flex flex-col items-center text-center space-y-3">
-            <div className="w-16 h-16 rounded-2xl bg-[#F3E5F5] flex items-center justify-center text-[#7B1FA2]">
-              <BarChart3 className="w-8 h-8 animate-pulse" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-lg font-extrabold text-slate-900 tracking-tight">Calculando progreso</h3>
-              <p className="text-sm text-slate-500 max-w-sm">Procesando el avance de tus eventos y subtareas...</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-3 animate-pulse">
-                <div className="h-4 bg-slate-200 rounded-full w-3/4"></div>
-                <div className="h-3 bg-slate-100 rounded-full w-1/2"></div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <PantallaCarga
+          icono={BarChart3}
+          titulo="Calculando progreso"
+          texto="Procesando el avance de tus eventos y subtareas..."
+        />
       )}
 
       {error && !cargando && (
@@ -295,7 +255,7 @@ const Progreso = () => {
             <AlertCircle className="w-5 h-5" />
             <span className="font-bold">{error}</span>
           </div>
-          <button onClick={obtenerDatos} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition shadow-sm cursor-pointer">
+          <button onClick={obtenerDatos} className={UI.btnPrimario}>
             Reintentar
           </button>
         </div>
@@ -303,29 +263,24 @@ const Progreso = () => {
 
       {!cargando && !error && (
         <>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F172A] tracking-tight">Progreso de eventos</h1>
-              <p className="text-xs sm:text-sm text-slate-500 mt-1">Consulta el avance de tus eventos y subtareas.</p>
-            </div>
-
-            <div className="flex items-center gap-2 bg-white border border-slate-200/90 rounded-xl px-3.5 py-2 shadow-sm w-fit">
+          <EncabezadoPagina titulo="Progreso de eventos" subtitulo="Consulta el avance de tus eventos y subtareas.">
+            <div className={UI.filtro}>
               <SlidersHorizontal className="w-4 h-4 text-slate-400 flex-shrink-0" />
               <select
                 value={filtroEstado}
                 onChange={(e) => setFiltroEstado(e.target.value)}
                 aria-label="Filtrar eventos"
-                className="bg-transparent text-slate-800 text-xs sm:text-sm font-semibold focus:outline-none cursor-pointer"
+                className={UI.filtroSelect}
               >
                 <option value="todos">Todos los eventos</option>
                 <option value="en_preparacion">En preparación</option>
                 <option value="completados">Completados</option>
               </select>
             </div>
-          </div>
+          </EncabezadoPagina>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col justify-between space-y-4">
+            <div className={`${UI.tarjeta} flex flex-col justify-between space-y-4`}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-[#00B4D8] text-white flex items-center justify-center flex-shrink-0 shadow-sm">
                   <BarChart3 className="w-5 h-5" />
@@ -335,7 +290,7 @@ const Progreso = () => {
               <div className="text-3xl font-extrabold text-slate-900 tracking-tight">{eventosCalculados.length}</div>
             </div>
 
-            <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col justify-between space-y-4">
+            <div className={`${UI.tarjeta} flex flex-col justify-between space-y-4`}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-[#10B981] text-white flex items-center justify-center flex-shrink-0 shadow-sm">
                   <CheckCircle2 className="w-5 h-5" />
@@ -347,7 +302,7 @@ const Progreso = () => {
               </div>
             </div>
 
-            <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col justify-between space-y-3">
+            <div className={`${UI.tarjeta} flex flex-col justify-between space-y-4`}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-[#7E22CE] text-white flex items-center justify-center flex-shrink-0 shadow-sm">
                   <TrendingUp className="w-5 h-5" />
@@ -364,17 +319,17 @@ const Progreso = () => {
             </div>
           </div>
 
-          <div className="flex flex-col gap-5 pt-4">
-            <h2 className="text-base sm:text-lg font-extrabold text-[#0F172A] tracking-tight">Detalle por evento</h2>
+          <div className="flex flex-col gap-4 pt-2">
+            <h2 className={UI.h2}>Detalle por evento</h2>
 
             {eventosCalculados.length === 0 ? (
-              <div className="bg-white p-8 rounded-2xl border border-slate-200/80 text-center text-slate-400 text-sm">
+              <div className={`${UI.tarjeta} p-8 text-center text-slate-400 text-sm`}>
                 No hay eventos registrados que coincidan con este filtro.
               </div>
             ) : (
               <div className="flex flex-col gap-4">
                 {eventosCalculados.map((evento) => (
-                  <div key={evento.id} className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col gap-4 hover:shadow-md transition-all">
+                  <div key={evento.id} className={`${UI.tarjeta} flex flex-col gap-4 hover:shadow-md transition-all`}>
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="flex flex-col gap-1.5 min-w-0">
                         <div className="flex items-center gap-2.5 flex-wrap">
@@ -384,14 +339,14 @@ const Progreso = () => {
                           </span>
                           <EtiquetaPospuestas cantidad={evento.progreso.pospuestas} />
                         </div>
-                        <p className="text-xs text-slate-400 font-medium">{evento.categoria || evento.tipo || 'Social'}</p>
+                        <p className="text-xs text-slate-500 font-medium">{evento.categoria || evento.tipo || 'Social'}</p>
                       </div>
 
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
                           onClick={() => navigate(`/detalle-evento/${evento.id}`)}
-                          className="inline-flex items-center gap-1 bg-[#F3E8FF]/60 hover:bg-[#F3E8FF] text-[#7E22CE] font-bold text-xs px-3.5 py-2 rounded-xl transition cursor-pointer"
+                          className="inline-flex items-center gap-1 text-xs font-bold text-[#7E22CE] bg-purple-50 hover:bg-[#7E22CE] hover:text-white px-3.5 py-2 rounded-xl transition whitespace-nowrap cursor-pointer"
                         >
                           <span>Ver detalle</span>
                           <ChevronRight className="w-3.5 h-3.5" />

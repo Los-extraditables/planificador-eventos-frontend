@@ -1,5 +1,4 @@
 import {
-  AlertCircle,
   AlertTriangle,
   Calendar,
   CalendarClock,
@@ -15,6 +14,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CargaGestionWidget from '../components/cargaGestionWidget';
+import { Aviso, EncabezadoPagina, PantallaCarga, UI, formatearFechaDisplay, limpiarFecha } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { useCargaDiaria } from '../context/CargaDiariaContext';
 import { useFiltradoGestiones } from '../hooks/useFiltradoGestiones';
@@ -43,19 +43,10 @@ const request = async (ruta, { method = 'GET', body } = {}) => {
 const NOTA_POR_DEFECTO = 'Pospuesto sin nota';
 const FECHA_MAX = '9999-12-31';
 
-const limpiarFecha = (f) => (f || '').toString().split('T')[0].split(' ')[0];
-
 const fechaOffsetStr = (dias = 0) => {
   const d = new Date();
   d.setDate(d.getDate() + dias);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
-
-const formatearFechaCorta = (valor) => {
-  const limpia = limpiarFecha(valor);
-  const [y, m, d] = limpia.split('-').map(Number);
-  if (!y || !m || !d) return limpia;
-  return new Date(y, m - 1, d).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
 const gestionesDe = (ev) => ev?.gestiones || ev?.gestiones_plan || [];
@@ -113,8 +104,7 @@ const EtiquetaPospuestas = ({ cantidad, texto }) => {
   );
 };
 
-/* ===================== Control Hecha / Posponer ===================== */
-// Hecha alterna completada/pendiente. Posponer abre un modal con fecha (obligatoria) y nota (opcional).
+/* ===================== Control Hecha / Posponer (igual que en Detalle) ===================== */
 const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
   const [abierto, setAbierto] = useState(false);
   const [form, setForm] = useState({ fecha: '', nota: '' });
@@ -165,9 +155,7 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
           disabled={guardando}
           aria-pressed={completada}
           title={completada ? 'Marcar como pendiente' : 'Marcar como hecha'}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-60 disabled:cursor-wait ${
-            completada ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200' : 'bg-purple-800 hover:bg-purple-900 text-white'
-          }`}
+          className={`${UI.btnHecha} ${completada ? UI.btnHechaListo : UI.btnHechaPendiente}`}
         >
           <Check className="w-3.5 h-3.5" />
           <span>{completada ? 'Completada' : 'Hecha'}</span>
@@ -183,7 +171,7 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
             }}
             disabled={guardando}
             title="Posponer subtarea"
-            className="px-3 py-2 text-xs font-bold text-slate-500 hover:text-purple-800 hover:bg-purple-50 border border-slate-200 hover:border-purple-200 rounded-xl transition cursor-pointer disabled:opacity-60"
+            className={UI.btnPosponer}
           >
             Posponer
           </button>
@@ -195,18 +183,16 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
           className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
           onMouseDown={(e) => e.target === e.currentTarget && cerrar()}
         >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="titulo-posponer"
-            className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-xl shadow-2xl border border-slate-100 text-left"
-          >
+          <div role="dialog" aria-modal="true" aria-labelledby="titulo-posponer" className={UI.modal}>
             <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <h3 id="titulo-posponer" className="text-2xl font-semibold text-[#1e2b4d]">
-                  Posponer subtarea
-                </h3>
-                <p className="text-sm text-slate-500 mt-1 truncate">{gestion.descripcion}</p>
+              <div className="flex items-start gap-4 min-w-0">
+                <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+                  <CalendarClock className="w-6 h-6" />
+                </div>
+                <div className="min-w-0">
+                  <h3 id="titulo-posponer" className={UI.modalTitulo}>Posponer subtarea</h3>
+                  <p className={`${UI.modalSubtitulo} truncate`}>{gestion.descripcion}</p>
+                </div>
               </div>
               <button type="button" onClick={cerrar} className="p-1 text-slate-400 hover:text-slate-600 transition cursor-pointer" aria-label="Cerrar">
                 <X className="w-5 h-5" />
@@ -215,7 +201,7 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
 
             <form onSubmit={confirmarPosponer} className="mt-6 space-y-5">
               <div>
-                <label htmlFor="posponer-fecha" className="block text-sm font-medium text-slate-700 mb-2">
+                <label htmlFor="posponer-fecha" className={UI.label}>
                   Nueva fecha <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
@@ -231,19 +217,15 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
                       setForm({ ...form, fecha: e.target.value });
                       setErrorFecha('');
                     }}
-                    className={`w-full pl-11 pr-4 py-3.5 border rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 transition ${
-                      errorFecha ? 'bg-red-50/70 border-red-400 focus:ring-red-400' : 'bg-white border-slate-200 focus:ring-purple-600 focus:border-purple-600'
-                    }`}
+                    className={`${errorFecha ? UI.inputError : UI.input} pl-11`}
                   />
                 </div>
-                {errorFecha && <p className="text-xs text-red-600 mt-2 font-medium">{errorFecha}</p>}
-                {maxFecha && !errorFecha && (
-                  <p className="text-[11px] text-slate-400 mt-1.5">Puedes elegir hasta la fecha límite del evento.</p>
-                )}
+                {errorFecha && <p className={UI.error}>{errorFecha}</p>}
+                {maxFecha && !errorFecha && <p className="text-[11px] text-slate-400 mt-1.5">Puedes elegir hasta la fecha límite del evento.</p>}
               </div>
 
               <div>
-                <label htmlFor="posponer-nota" className="block text-sm font-medium text-slate-700 mb-2">
+                <label htmlFor="posponer-nota" className={UI.label}>
                   Nota <span className="text-slate-400 font-normal">(opcional)</span>
                 </label>
                 <textarea
@@ -253,16 +235,16 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
                   placeholder="Ej. Esperando respuesta del proveedor"
                   value={form.nota}
                   onChange={(e) => setForm({ ...form, nota: e.target.value })}
-                  className="w-full px-4 py-3.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-purple-600 transition resize-none"
+                  className={`${UI.input} resize-none`}
                 />
                 <p className="text-[11px] text-slate-400 mt-1 text-right">{form.nota.length}/300</p>
               </div>
 
               <div className="flex justify-end gap-3 pt-5 border-t border-slate-100">
-                <button type="button" onClick={cerrar} className="px-6 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium text-sm rounded-xl transition cursor-pointer">
+                <button type="button" onClick={cerrar} className={UI.btnSecundario}>
                   Cancelar
                 </button>
-                <button type="submit" className="px-6 py-3 bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-semibold text-sm rounded-xl shadow-sm transition cursor-pointer">
+                <button type="submit" className={UI.btnPrimario}>
                   Posponer
                 </button>
               </div>
@@ -339,7 +321,7 @@ const SeccionGestiones = ({ tipo, gestiones, prioridadPorId, onRegistrar }) => {
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="font-bold text-slate-900 text-sm">{cfg.titulo}</h3>
+            <h3 className="font-extrabold text-slate-900 text-sm">{cfg.titulo}</h3>
             <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${cfg.badge}`}>{gestiones.length}</span>
           </div>
           <p className={`text-xs font-medium ${cfg.subColor}`}>{cfg.subtitulo}</p>
@@ -355,15 +337,16 @@ const SeccionGestiones = ({ tipo, gestiones, prioridadPorId, onRegistrar }) => {
   );
 };
 
-const Metrica = ({ icono: Icono, fondo, color, valor, etiqueta }) => (
-  <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-4">
-    <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${fondo}`}>
-      <Icono className={`w-6 h-6 ${color}`} />
+// Mismo diseño que las tarjetas de métricas de Progreso
+const Metrica = ({ icono: Icono, fondo, valor, etiqueta }) => (
+  <div className={`${UI.tarjeta} flex flex-col justify-between space-y-4`}>
+    <div className="flex items-center gap-3">
+      <div className={`w-10 h-10 rounded-xl text-white flex items-center justify-center flex-shrink-0 shadow-sm ${fondo}`}>
+        <Icono className="w-5 h-5" />
+      </div>
+      <span className="text-xs font-semibold text-slate-500">{etiqueta}</span>
     </div>
-    <div>
-      <span className="text-2xl font-bold text-slate-900 block leading-none mb-1">{valor}</span>
-      <span className="text-xs text-slate-500 font-medium">{etiqueta}</span>
-    </div>
+    <div className="text-3xl font-extrabold text-slate-900 tracking-tight">{valor}</div>
   </div>
 );
 
@@ -388,7 +371,7 @@ const TarjetaGestion = ({ gestion, cfg, prioridad, onRegistrar }) => {
             </span>
           )}
 
-          <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-500 text-xs font-semibold px-2.5 py-0.5 rounded-md">
+          <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 text-xs font-semibold px-2.5 py-0.5 rounded-md">
             <Calendar className="w-3.5 h-3.5" /> {gestion.eventoNombre}
           </span>
 
@@ -399,18 +382,18 @@ const TarjetaGestion = ({ gestion, cfg, prioridad, onRegistrar }) => {
           )}
         </div>
 
-        <h3 className={`text-base font-bold transition ${gestion.completada ? 'line-through text-slate-400' : 'text-slate-900'}`}>
+        <h3 className={`text-sm font-semibold transition ${gestion.completada ? 'line-through text-slate-400' : 'text-slate-900'}`}>
           {gestion.descripcion}
         </h3>
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 text-xs text-slate-500">
           {fechaValor && (
             <span className="flex items-center gap-1 text-slate-600 font-medium">
-              <CalendarClock className="w-3.5 h-3.5 text-slate-400" /> Fecha límite: {formatearFechaCorta(fechaValor)}
+              <CalendarClock className="w-3.5 h-3.5 text-slate-400" /> Fecha límite: {formatearFechaDisplay(fechaValor)}
             </span>
           )}
           {gestion.horas_estimadas !== undefined && gestion.horas_estimadas !== null && (
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-1 font-medium">
               <Clock className="w-3.5 h-3.5 text-slate-400" /> {gestion.horas_estimadas} h
             </span>
           )}
@@ -451,7 +434,7 @@ const Hoy = ({ onCrearEvento, setPestanaActiva }) => {
   const mostrarMensaje = (tipo, texto) => {
     clearTimeout(timerMensaje.current);
     setMensaje({ tipo, texto });
-    timerMensaje.current = setTimeout(() => setMensaje({ tipo: '', texto: '' }), 4000);
+    timerMensaje.current = setTimeout(() => setMensaje({ tipo: '', texto: '' }), 5000);
   };
   useEffect(() => () => clearTimeout(timerMensaje.current), []);
 
@@ -528,7 +511,7 @@ const Hoy = ({ onCrearEvento, setPestanaActiva }) => {
 
       if (accion === 'hecho') mostrarMensaje('exito', `¡"${gestion.descripcion}" completada!`);
       else if (accion === 'pendiente') mostrarMensaje('exito', `"${gestion.descripcion}" volvió a pendiente.`);
-      else mostrarMensaje('exito', `"${gestion.descripcion}" pospuesta al ${formatearFechaCorta(datos.fecha)}.`);
+      else mostrarMensaje('exito', `"${gestion.descripcion}" pospuesta al ${formatearFechaDisplay(datos.fecha)}.`);
       return { ok: true };
     } catch (err) {
       enVuelo.current -= 1;
@@ -591,7 +574,8 @@ const Hoy = ({ onCrearEvento, setPestanaActiva }) => {
   const horasTotalesHoy = gestionesHoy.reduce((acc, g) => acc + (parseFloat(g.horas_estimadas) || 0), 0);
   const porcentajeCarga = limiteDiarioMax > 0 ? Math.min((horasTotalesHoy / limiteDiarioMax) * 100, 100) : 0;
 
-  const fechaHoyTexto = new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const fechaHoyBruta = new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const fechaHoyTexto = fechaHoyBruta.charAt(0).toUpperCase() + fechaHoyBruta.slice(1);
 
   const aplicarSolucion = (tipoSolucion) => {
     if (tipoSolucion === 'ignorar') {
@@ -606,61 +590,31 @@ const Hoy = ({ onCrearEvento, setPestanaActiva }) => {
   const primeraCarga = cargando && !cargado;
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-6xl mx-auto space-y-6 bg-slate-50/50 min-h-screen text-slate-800 text-left font-sans">
-      {mensaje.texto && (
-        <div
-          role="status"
-          className={`p-4 rounded-xl font-medium text-sm border flex items-center gap-2.5 shadow-sm transition-all ${
-            mensaje.tipo === 'exito' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'
-          }`}
-        >
-          {mensaje.tipo === 'exito' ? (
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-          ) : (
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-          )}
-          <span>{mensaje.texto}</span>
-        </div>
-      )}
+    <div className={UI.pagina}>
+      {mensaje.texto && <Aviso tipo={mensaje.tipo} texto={mensaje.texto} />}
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <p className="text-xs sm:text-sm text-slate-500 capitalize mt-0.5">{fechaHoyTexto}</p>
-
-        <div className="flex items-center gap-2 bg-white border border-slate-200/90 rounded-xl px-3 py-2 shadow-sm w-fit">
+      <EncabezadoPagina titulo="Hoy" subtitulo={fechaHoyTexto}>
+        <div className={UI.filtro}>
           <SlidersHorizontal className="w-4 h-4 text-slate-400 flex-shrink-0" />
           <select
             value={filtroEstado}
             onChange={(e) => setFiltroEstado(e.target.value)}
             aria-label="Filtrar eventos"
-            className="bg-transparent text-slate-800 text-xs sm:text-sm font-semibold focus:outline-none cursor-pointer"
+            className={UI.filtroSelect}
           >
             <option value="todos">Todos los eventos</option>
             <option value="en_preparacion">En preparación</option>
             <option value="completados">Completados</option>
           </select>
         </div>
-      </div>
+      </EncabezadoPagina>
 
       {primeraCarga && (
-        <div className="py-12 px-4 flex flex-col items-center justify-center space-y-8" role="status" aria-live="polite">
-          <div className="flex flex-col items-center text-center space-y-3">
-            <div className="w-16 h-16 rounded-2xl bg-[#F3E5F5] flex items-center justify-center text-[#7B1FA2]">
-              <CalendarClock className="w-8 h-8 animate-pulse" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-lg font-extrabold text-slate-900 tracking-tight">Estamos preparando tu día</h3>
-              <p className="text-sm text-slate-500 max-w-sm">Organizamos tus subtareas por prioridad. Tomará solo un momento.</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-3 animate-pulse">
-                <div className="h-4 bg-slate-200 rounded-full w-3/4"></div>
-                <div className="h-3 bg-slate-100 rounded-full w-1/2"></div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <PantallaCarga
+          icono={CalendarClock}
+          titulo="Estamos preparando tu día"
+          texto="Organizamos tus subtareas por prioridad. Tomará solo un momento."
+        />
       )}
 
       {error && !primeraCarga && !cargado && (
@@ -668,13 +622,9 @@ const Hoy = ({ onCrearEvento, setPestanaActiva }) => {
           <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mb-6 text-red-400">
             <WifiOff className="h-8 w-8" />
           </div>
-          <h2 className="text-xl sm:text-2xl font-extrabold text-[#0F172A] mb-2 tracking-tight">No pudimos cargar tus actividades</h2>
+          <h2 className={`${UI.cargandoTitulo} mb-2`}>No pudimos cargar tus actividades</h2>
           <p className="text-sm text-slate-500 max-w-md mb-6 leading-relaxed">Parece que perdimos la conexión. Compruébala e inténtalo de nuevo.</p>
-          <button
-            type="button"
-            onClick={() => cargar()}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-[#E10000] hover:bg-red-700 text-white font-bold text-sm rounded-xl transition-all shadow-sm cursor-pointer"
-          >
+          <button type="button" onClick={() => cargar()} className={UI.btnPrimario}>
             <RefreshCw className="h-4 w-4" />
             Volver a intentar
           </button>
@@ -683,34 +633,29 @@ const Hoy = ({ onCrearEvento, setPestanaActiva }) => {
 
       {cargado &&
         (eventos.length === 0 ? (
-          <div className="bg-white border border-slate-200/80 rounded-3xl p-12 text-center flex flex-col items-center justify-center space-y-4 my-12 shadow-sm">
+          <div className={`${UI.tarjeta} p-12 text-center flex flex-col items-center justify-center space-y-4 my-12`}>
             <div className="w-16 h-16 rounded-2xl bg-[#F3E5F5] flex items-center justify-center text-[#7B1FA2]">
               <Calendar className="w-8 h-8" />
             </div>
             <div className="space-y-1">
-              <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">¡Todo listo por hoy!</h2>
+              <h2 className={UI.cargandoTitulo}>¡Todo listo por hoy!</h2>
               <p className="text-sm text-slate-500">No tienes subtareas urgentes hoy.</p>
             </div>
-            <button
-              type="button"
-              onClick={handleIrACrear}
-              className="mt-2 inline-flex items-center gap-2 px-6 py-3 bg-[#7B1FA2] hover:bg-[#6A1B9A] text-white font-semibold text-sm rounded-xl transition-all shadow-sm cursor-pointer"
-            >
+            <button type="button" onClick={handleIrACrear} className={`${UI.btnPrimario} mt-2`}>
               <span>+</span> Crear un evento
             </button>
           </div>
         ) : (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <Metrica icono={Calendar} fondo="bg-[#E0F2F1]" color="text-[#00796B]" valor={gestionesHoy.length} etiqueta="Subtareas para hoy" />
+              <Metrica icono={Calendar} fondo="bg-[#00B4D8]" valor={gestionesHoy.length} etiqueta="Subtareas para hoy" />
               <Metrica
                 icono={ClipboardList}
-                fondo="bg-[#F3E5F5]"
-                color="text-[#7B1FA2]"
+                fondo="bg-[#7E22CE]"
                 valor={filtroEstado === 'completados' ? gestionesCompletadas.length : totalPendientes}
                 etiqueta={filtroEstado === 'completados' ? 'Subtareas completadas' : 'Subtareas pendientes'}
               />
-              <Metrica icono={Clock} fondo="bg-[#F3E5F5]" color="text-[#7B1FA2]" valor={gestionesProximas.length} etiqueta="Subtareas próximas" />
+              <Metrica icono={Clock} fondo="bg-slate-500" valor={gestionesProximas.length} etiqueta="Subtareas próximas" />
             </div>
 
             {/* Se recalcula al instante con cada cambio */}
@@ -723,7 +668,7 @@ const Hoy = ({ onCrearEvento, setPestanaActiva }) => {
             />
 
             <div className="space-y-3">
-              <h2 className="text-xl font-extrabold text-[#0F172A] tracking-tight">Subtareas de hoy</h2>
+              <h2 className={UI.h2}>Subtareas de hoy</h2>
               <div className="bg-[#E6F7F8] border border-[#A7ECEE] rounded-2xl p-4 flex items-start gap-3 text-[#0D6E72] text-sm leading-relaxed">
                 <div className="w-5 h-5 rounded-full border border-[#0D6E72] flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5">?</div>
                 <p>
