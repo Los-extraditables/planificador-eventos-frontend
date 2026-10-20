@@ -9,11 +9,44 @@ import {
   Edit3,
   Plus,
   SlidersHorizontal,
-  Trash2
+  Trash2,
+  X
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { authService } from '../services/authService';
+
+// Campo de fecha con icono a la izquierda y placeholder (se muestra como texto hasta que se enfoca)
+const DateField = ({ value, onChange, min, max, placeholder, required, hasError }) => {
+  const [enfocado, setEnfocado] = useState(false);
+  const ref = useRef(null);
+
+  return (
+    <div className="relative">
+      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+      <input
+        ref={ref}
+        type={enfocado || value ? 'date' : 'text'}
+        placeholder={placeholder}
+        min={min}
+        max={max}
+        required={required}
+        value={value}
+        onChange={onChange}
+        onFocus={() => {
+          setEnfocado(true);
+          setTimeout(() => { try { ref.current?.showPicker?.(); } catch { /* noop */ } }, 0);
+        }}
+        onBlur={() => setEnfocado(false)}
+        className={`w-full pl-11 pr-4 py-3.5 border rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition [&::-webkit-calendar-picker-indicator]:hidden ${
+          hasError
+            ? 'bg-red-50/70 border-red-400 focus:ring-red-400'
+            : 'bg-white border-slate-200 focus:ring-purple-600 focus:border-purple-600'
+        }`}
+      />
+    </div>
+  );
+};
 
 const DetalleEvento = () => {
   const { id: urlId } = useParams();
@@ -68,6 +101,14 @@ const DetalleEvento = () => {
     }
     return String(obj);
   };
+
+  // Suma las horas estimadas de una lista de subtareas (opcionalmente excluyendo una)
+  const sumarHoras = (gestiones, excluirId = null) =>
+    gestiones.reduce((acc, g) => {
+      if (excluirId !== null && g.id === excluirId) return acc;
+      const h = parseFloat(g.horas_estimadas);
+      return acc + (!isNaN(h) && h > 0 ? h : 0);
+    }, 0);
 
   const formatearFechaDisplay = (fechaStr) => {
     if (!fechaStr) return '';
@@ -140,8 +181,8 @@ const DetalleEvento = () => {
     obtenerEventos();
   }, [urlId]);
 
-  const eventoActivo = eventoSeleccionadoId !== 'todos' 
-    ? eventos.find(e => String(e.id) === String(eventoSeleccionadoId)) 
+  const eventoActivo = eventoSeleccionadoId !== 'todos'
+    ? eventos.find(e => String(e.id) === String(eventoSeleccionadoId))
     : null;
 
   const handleToggleGestion = async (gestion) => {
@@ -191,6 +232,23 @@ const DetalleEvento = () => {
     const token = authService.getToken();
     if (!token) return handleSesionExpirada();
 
+    // Validación: el nuevo límite no puede ser menor a las horas ya asignadas
+    const nuevoLimite = parseFloat(formEvento.limite_diario_horas);
+    const horasUsadas = sumarHoras(eventoActivo?.gestiones || eventoActivo?.gestiones_plan || []);
+
+    if (isNaN(nuevoLimite) || nuevoLimite <= 0) {
+      mostrarMensaje('error', 'Ingresa un límite de horas mayor a 0.');
+      return;
+    }
+
+    if (nuevoLimite < horasUsadas) {
+      mostrarMensaje(
+        'error',
+        `No puedes bajar el límite a ${nuevoLimite} h porque tus subtareas ya suman ${horasUsadas} h. Reduce las horas de las subtareas o elimina alguna, o deja el límite en ${horasUsadas} h o más.`
+      );
+      return;
+    }
+
     const fechaAnteriorLimpia = (eventoActivo?.fecha || '').split('T')[0].split(' ')[0];
     const fechaNuevaLimpia = (formEvento.fecha || '').split('T')[0].split(' ')[0];
     const cambioFecha = fechaNuevaLimpia !== fechaAnteriorLimpia;
@@ -206,7 +264,7 @@ const DetalleEvento = () => {
           nombre: formEvento.nombre.trim(),
           tipo: formEvento.tipo,
           fecha: fechaNuevaLimpia,
-          limite_diario_horas: parseFloat(formEvento.limite_diario_horas) || 6,
+          limite_diario_horas: nuevoLimite,
           forzar_sobrecarga: true
         })
       });
@@ -271,14 +329,14 @@ const DetalleEvento = () => {
 
   // --- MODAL GESTIONES ---
   const handleAbrirCrear = () => {
-    setFormGestion({ descripcion: '', plazo: eventoActivo?.fecha || hoyStr, horas_estimadas: '' });
+    setFormGestion({ descripcion: '', plazo: '', horas_estimadas: '' });
     setModalGestion({ abierto: true, modo: 'crear', gestionId: null });
   };
 
   const handleAbrirEditar = (gestion) => {
     setFormGestion({
       descripcion: gestion.descripcion,
-      plazo: eventoActivo?.fecha || gestion.plazo || '',
+      plazo: (gestion.plazo || '').toString().split('T')[0].split(' ')[0],
       horas_estimadas: gestion.horas_estimadas ? String(gestion.horas_estimadas) : ''
     });
     setModalGestion({ abierto: true, modo: 'editar', gestionId: gestion.id });
@@ -289,11 +347,23 @@ const DetalleEvento = () => {
     const token = authService.getToken();
     if (!token) return handleSesionExpirada();
 
-    const plazoFinal = eventoActivo?.fecha;
+    const fechaEvento = (eventoActivo?.fecha || '').toString().split('T')[0].split(' ')[0];
+    // Si no se elige plazo, se usa la fecha límite del evento (igual que al crear evento)
+    const plazoFinal = formGestion.plazo || fechaEvento;
     const nuevasHoras = parseFloat(formGestion.horas_estimadas);
 
     if (!plazoFinal) {
       mostrarMensaje('error', 'El evento activo no tiene una fecha definida.');
+      return;
+    }
+
+    if (formGestion.plazo && formGestion.plazo < hoyStr) {
+      mostrarMensaje('error', 'El plazo no puede ser anterior a hoy.');
+      return;
+    }
+
+    if (formGestion.plazo && fechaEvento && formGestion.plazo > fechaEvento) {
+      mostrarMensaje('error', `El plazo no puede ser posterior a la fecha límite del evento (${formatearFechaDisplay(fechaEvento)}).`);
       return;
     }
 
@@ -311,19 +381,17 @@ const DetalleEvento = () => {
     if (!isNaN(limiteEvento) && limiteEvento > 0) {
       const gestionesActuales = eventoActivo?.gestiones || eventoActivo?.gestiones_plan || [];
 
-      let horasExistentes = 0;
-      for (const g of gestionesActuales) {
-        if (modalGestion.modo === 'editar' && g.id === modalGestion.gestionId) continue;
-        const hrs = parseFloat(g.horas_estimadas);
-        if (!isNaN(hrs) && hrs > 0) horasExistentes += hrs;
-      }
+      const horasExistentes = sumarHoras(
+        gestionesActuales,
+        modalGestion.modo === 'editar' ? modalGestion.gestionId : null
+      );
 
       const totalConNuevas = horasExistentes + nuevasHoras;
 
       if (totalConNuevas > limiteEvento) {
         mostrarMensaje(
           'error',
-          `Las horas estimadas de las subtareas (${totalConNuevas}h) superan la duración máxima establecida para este evento (${limiteEvento}h).`
+          `No se puede guardar: las subtareas sumarían ${totalConNuevas} h y el límite del evento es ${limiteEvento} h. Te quedan ${Math.max(limiteEvento - horasExistentes, 0)} h disponibles. Reduce las horas de esta subtarea o aumenta el límite del evento.`
         );
         return;
       }
@@ -480,19 +548,34 @@ const DetalleEvento = () => {
   const totalGestiones = gestionesEv.length;
   const porcentaje = totalGestiones > 0 ? Math.round((completadas / totalGestiones) * 100) : 0;
 
+  // --- Avisos en vivo de horas ---
+  const limiteActual = parseFloat(eventoActivo?.limite_diario_horas) || 0;
+  const horasOtras = sumarHoras(
+    gestionesEv,
+    modalGestion.modo === 'editar' ? modalGestion.gestionId : null
+  );
+  const horasNuevas = parseFloat(formGestion.horas_estimadas) || 0;
+  const excedeSubtarea = limiteActual > 0 && horasOtras + horasNuevas > limiteActual;
+
+  const horasSubtareasTotal = sumarHoras(gestionesEv);
+  const nuevoLimiteForm = parseFloat(formEvento.limite_diario_horas);
+  const limiteMuyBajo = !isNaN(nuevoLimiteForm) && nuevoLimiteForm < horasSubtareasTotal;
+
   return (
     <div className="max-w-5xl mx-auto p-4 sm:p-6 md:p-8 font-sans text-slate-800 text-left bg-slate-50/50 min-h-screen space-y-6">
-      
+
+      {/* MENSAJE FLOTANTE (visible también sobre los modales) */}
       {mensaje.texto && (
-        <div className={`p-4 rounded-2xl text-sm font-semibold flex items-center gap-2.5 shadow-sm transition-all ${
-          mensaje.tipo === 'exito' 
-            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-            : 'bg-red-50 text-red-700 border border-red-200'
-        }`}>
+        <div
+          role="alert"
+          className={`fixed top-5 right-5 z-[60] max-w-sm flex items-start gap-2.5 px-5 py-4 rounded-2xl shadow-lg text-sm font-semibold text-white transition-all ${
+            mensaje.tipo === 'exito' ? 'bg-emerald-600' : 'bg-red-600'
+          }`}
+        >
           {mensaje.tipo === 'exito' ? (
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+            <CheckCircle2 className="w-5 h-5 shrink-0" />
           ) : (
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+            <AlertCircle className="w-5 h-5 shrink-0" />
           )}
           <span>{mensaje.texto}</span>
         </div>
@@ -545,10 +628,10 @@ const DetalleEvento = () => {
 
           <div className="grid grid-cols-1 gap-4 pt-2">
             {eventos.map((ev) => {
-              const gestionesEv = ev.gestiones || ev.gestiones_plan || [];
-              const completadas = gestionesEv.filter(g => g.completada).length;
-              const total = gestionesEv.length;
-              const porc = total > 0 ? Math.round((completadas / total) * 100) : 0;
+              const gestionesLista = ev.gestiones || ev.gestiones_plan || [];
+              const completadasLista = gestionesLista.filter(g => g.completada).length;
+              const total = gestionesLista.length;
+              const porc = total > 0 ? Math.round((completadasLista / total) * 100) : 0;
 
               return (
                 <div
@@ -569,7 +652,7 @@ const DetalleEvento = () => {
 
                   <div className="flex items-center gap-6 justify-between sm:justify-end">
                     <div className="text-right hidden sm:block">
-                      <span className="text-xs font-bold text-slate-600">{completadas}/{total} subtareas ({porc}%)</span>
+                      <span className="text-xs font-bold text-slate-600">{completadasLista}/{total} subtareas ({porc}%)</span>
                       <div className="w-32 bg-slate-100 rounded-full h-2 mt-1.5 overflow-hidden">
                         <div className="bg-[#7E22CE] h-2 rounded-full" style={{ width: `${porc}%` }} />
                       </div>
@@ -590,7 +673,7 @@ const DetalleEvento = () => {
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
               {eventoActivo?.nombre}
             </h1>
-            
+
             <div className="flex flex-wrap items-center gap-2.5">
               <span className="px-3 py-1 bg-[#F3E8FF] text-[#7E22CE] border border-[#E9D5FF] rounded-full text-xs font-bold">
                 {eventoActivo?.estado || 'En preparación'}
@@ -615,7 +698,7 @@ const DetalleEvento = () => {
               <span className="text-slate-900 font-extrabold">{completadas}/{totalGestiones} subtareas <span className="text-purple-700 ml-1">{porcentaje}%</span></span>
             </div>
             <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
-              <div 
+              <div
                 className="h-full bg-[#7E22CE] transition-all duration-500 rounded-full"
                 style={{ width: `${porcentaje}%` }}
               />
@@ -645,8 +728,8 @@ const DetalleEvento = () => {
                 </p>
               ) : (
                 gestionesEv.map((sub) => (
-                  <div 
-                    key={sub.id} 
+                  <div
+                    key={sub.id}
                     className="flex items-center justify-between p-4 bg-slate-50/50 hover:bg-slate-50 border border-slate-200/80 rounded-xl transition gap-3"
                   >
                     <div className="flex items-center gap-3 min-w-0 pr-2">
@@ -680,10 +763,10 @@ const DetalleEvento = () => {
                           <Clock className="w-3.5 h-3.5 text-slate-400" /> {sub.horas_estimadas} hrs
                         </span>
                       )}
-                      
+
                       <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
-                        sub.completada 
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                        sub.completada
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                           : 'bg-slate-100 text-slate-600 border border-slate-200'
                       }`}>
                         {sub.completada ? '✓ Completada' : 'Pendiente'}
@@ -717,20 +800,33 @@ const DetalleEvento = () => {
       {/* MODAL: EDITAR EVENTO */}
       {modalEvento && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-6 sm:p-8 w-full max-w-lg shadow-2xl border border-slate-100 space-y-5 text-left">
-            <h3 className="text-lg font-bold text-slate-900 pb-3 border-b border-slate-100">
-              Editar Datos del Evento
-            </h3>
-            
-            <form onSubmit={handleGuardarEvento} className="space-y-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-xl shadow-2xl border border-slate-100 text-left">
+            <div className="flex items-start justify-between gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                  Nombre del Evento <span className="text-red-500">*</span>
+                <h3 className="text-2xl font-semibold text-[#1e2b4d]">Editar evento</h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  Actualiza los datos generales y la capacidad diaria de trabajo.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalEvento(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                aria-label="Cerrar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleGuardarEvento} className="mt-6 space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Nombre del evento
                 </label>
                 <input
                   type="text"
                   required
-                  className="w-full px-4 py-3 bg-[#F8FAFC] border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600 transition"
+                  className="w-full px-4 py-3.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-purple-600 transition"
                   value={formEvento.nombre}
                   onChange={(e) => setFormEvento({ ...formEvento, nombre: e.target.value })}
                 />
@@ -738,11 +834,11 @@ const DetalleEvento = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                    Tipo <span className="text-red-500">*</span>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Tipo de evento
                   </label>
                   <select
-                    className="w-full px-4 py-3 bg-[#F8FAFC] border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600 transition cursor-pointer"
+                    className="w-full px-4 py-3.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-purple-600 transition cursor-pointer"
                     value={formEvento.tipo}
                     onChange={(e) => setFormEvento({ ...formEvento, tipo: e.target.value })}
                   >
@@ -755,14 +851,13 @@ const DetalleEvento = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                    Fecha Límite <span className="text-red-500">*</span>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Fecha límite
                   </label>
-                  <input
-                    type="date"
+                  <DateField
                     required
                     min={hoyStr}
-                    className="w-full px-4 py-3 bg-[#F8FAFC] border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600 transition"
+                    placeholder="Ej. 20/09/2026"
                     value={formEvento.fecha}
                     onChange={(e) => setFormEvento({ ...formEvento, fecha: e.target.value })}
                   />
@@ -770,34 +865,50 @@ const DetalleEvento = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                  Límite Diario de Horas <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Máximo de horas por día
                 </label>
-                <input
-                  type="number"
-                  step="0.5"
-                  min="1"
-                  max="24"
-                  required
-                  className="w-full px-4 py-3 bg-[#F8FAFC] border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600 transition"
-                  value={formEvento.limite_diario_horas}
-                  onChange={(e) => setFormEvento({ ...formEvento, limite_diario_horas: e.target.value })}
-                />
+                <div className="relative">
+                  <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="1"
+                    max="24"
+                    required
+                    placeholder="Ej. 6"
+                    className={`w-full pl-11 pr-24 py-3.5 border rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition ${
+                      limiteMuyBajo
+                        ? 'bg-red-50/70 border-red-400 focus:ring-red-400'
+                        : 'bg-white border-slate-200 focus:ring-purple-600 focus:border-purple-600'
+                    }`}
+                    value={formEvento.limite_diario_horas}
+                    onChange={(e) => setFormEvento({ ...formEvento, limite_diario_horas: e.target.value })}
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400 pointer-events-none">
+                    horas/día
+                  </span>
+                </div>
+                {limiteMuyBajo && (
+                  <p className="text-xs text-red-600 mt-2 font-medium">
+                    Tus subtareas ya suman {horasSubtareasTotal} h. Reduce o elimina subtareas, o usa un límite de {horasSubtareasTotal} h o más.
+                  </p>
+                )}
               </div>
 
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+              <div className="flex justify-end gap-3 pt-5 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setModalEvento(false)}
-                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+                  className="px-6 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium text-sm rounded-xl transition cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-[#7E22CE] hover:bg-[#6B21A8] text-white font-bold text-xs rounded-xl shadow-sm transition cursor-pointer"
+                  className="px-6 py-3 bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-semibold text-sm rounded-xl shadow-sm transition cursor-pointer"
                 >
-                  Guardar Cambios
+                  Guardar cambios
                 </button>
               </div>
             </form>
@@ -808,59 +919,108 @@ const DetalleEvento = () => {
       {/* MODAL: CREAR / EDITAR SUBTAREA (GESTIÓN) */}
       {modalGestion.abierto && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-6 sm:p-8 w-full max-w-lg shadow-2xl border border-slate-100 space-y-5 text-left">
-            <h3 className="text-lg font-bold text-slate-900 pb-3 border-b border-slate-100">
-              {modalGestion.modo === 'crear' ? 'Nueva Subtarea' : 'Editar Subtarea'}
-            </h3>
-            
-            <form onSubmit={handleGuardarGestion} className="space-y-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-xl shadow-2xl border border-slate-100 text-left">
+            <div className="flex items-start justify-between gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                  Descripción <span className="text-red-500">*</span>
+                <h3 className="text-2xl font-semibold text-[#1e2b4d]">
+                  {modalGestion.modo === 'crear' ? 'Agregar subtarea' : 'Editar subtarea'}
+                </h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  {modalGestion.modo === 'crear'
+                    ? 'Añade una nueva subtarea a este evento.'
+                    : 'Actualiza los datos de esta subtarea.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalGestion({ abierto: false, modo: 'crear', gestionId: null })}
+                className="p-1 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                aria-label="Cerrar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleGuardarGestion} className="mt-6 space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Nombre de la subtarea
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="Ej. Comprar decoración, Enviar invitaciones..."
-                  className="w-full px-4 py-3 bg-[#F8FAFC] border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600 transition"
+                  autoFocus
+                  placeholder="Ej. Confirmar servicio de catering"
+                  className="w-full px-4 py-3.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-purple-600 transition"
                   value={formGestion.descripcion}
                   onChange={(e) => setFormGestion({ ...formGestion, descripcion: e.target.value })}
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                  Horas Estimadas <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  step="0.5"
-                  min="0.5"
-                  max="24"
-                  required
-                  placeholder="Ej. 2.5"
-                  className="w-full px-4 py-3 bg-[#F8FAFC] border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600 transition"
-                  value={formGestion.horas_estimadas}
-                  onChange={(e) => setFormGestion({ ...formGestion, horas_estimadas: e.target.value })}
-                />
-                <p className="text-[11px] text-slate-400 mt-1">
-                  El plazo se asignará automáticamente a la fecha límite del evento ({eventoActivo?.fecha ? formatearFechaDisplay(eventoActivo.fecha) : ''}).
-                </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Fecha</label>
+                  <DateField
+                    min={hoyStr}
+                    max={(eventoActivo?.fecha || '').toString().split('T')[0].split(' ')[0] || undefined}
+                    placeholder="Ej. 20/09/2026"
+                    value={formGestion.plazo}
+                    onChange={(e) => setFormGestion({ ...formGestion, plazo: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Horas estimadas
+                  </label>
+                  <div className="relative">
+                    <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0.5"
+                      max="24"
+                      required
+                      placeholder="Ej. 2.5"
+                      className={`w-full pl-11 pr-4 py-3.5 border rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition ${
+                        excedeSubtarea
+                          ? 'bg-red-50/70 border-red-400 focus:ring-red-400'
+                          : 'bg-white border-slate-200 focus:ring-purple-600 focus:border-purple-600'
+                      }`}
+                      value={formGestion.horas_estimadas}
+                      onChange={(e) => setFormGestion({ ...formGestion, horas_estimadas: e.target.value })}
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+              {limiteActual > 0 && (
+                <p className={`text-xs font-medium ${excedeSubtarea ? 'text-red-600' : 'text-slate-500'}`}>
+                  {excedeSubtarea
+                    ? `Superas el límite: ${horasOtras + horasNuevas} h de ${limiteActual} h. Reduce las horas o aumenta el límite del evento.`
+                    : `Disponibles: ${Math.max(limiteActual - horasOtras, 0)} h de ${limiteActual} h.`}
+                </p>
+              )}
+
+              <div className="flex justify-end gap-3 pt-5 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setModalGestion({ abierto: false, modo: 'crear', gestionId: null })}
-                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+                  className="px-6 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium text-sm rounded-xl transition cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-[#7E22CE] hover:bg-[#6B21A8] text-white font-bold text-xs rounded-xl shadow-sm transition cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-6 py-3 bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-semibold text-sm rounded-xl shadow-sm transition cursor-pointer"
                 >
-                  {modalGestion.modo === 'crear' ? 'Crear Subtarea' : 'Guardar Cambios'}
+                  {modalGestion.modo === 'crear' ? (
+                    <>
+                      <Plus className="w-4 h-4" /> Agregar subtarea
+                    </>
+                  ) : (
+                    'Guardar cambios'
+                  )}
                 </button>
               </div>
             </form>

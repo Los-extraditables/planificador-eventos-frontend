@@ -1,4 +1,4 @@
-import { AlertCircle, AlertTriangle, Calendar, CalendarClock, CheckCircle2, ClipboardList, Clock } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Calendar, CalendarClock, CheckCircle2, ClipboardList, Clock, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CargaGestionWidget from '../components/cargaGestionWidget';
@@ -6,6 +6,51 @@ import { useAuth } from '../context/AuthContext';
 import { useCargaDiaria } from '../context/CargaDiariaContext';
 import { useFiltradoGestiones } from '../hooks/useFiltradoGestiones';
 import { authService } from '../services/authService';
+
+// Devuelve una fecha YYYY-MM-DD desplazada N días desde hoy
+const fechaOffsetStr = (dias = 0) => {
+  const d = new Date();
+  d.setDate(d.getDate() + dias);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+};
+
+// --- PRIORIDADES ---
+// Orden total (sin empates) dentro de cada grupo:
+// 1) plazo más antiguo primero  2) menos horas primero (sin horas, al final)
+// 3) pospuestas primero         4) evento con fecha límite más cercana
+// 5) id (desempate estable)
+const FECHA_MAX = '9999-12-31';
+const limpiarFecha = (f) => (f || '').toString().split('T')[0].split(' ')[0];
+const fechaGestion = (g) => limpiarFecha(g.plazo || g.fecha) || FECHA_MAX;
+const horasGestion = (g) => {
+  const h = parseFloat(g.horas_estimadas);
+  return !isNaN(h) && h > 0 ? h : Infinity;
+};
+const esPospuesta = (g) =>
+  Boolean(g.nota_pospuesto || g.estado === 'pospuesto' || g.pospuesto || g.reprogramado);
+
+const compararPrioridad = (a, b) => {
+  const fa = fechaGestion(a);
+  const fb = fechaGestion(b);
+  if (fa !== fb) return fa < fb ? -1 : 1;
+
+  const ha = horasGestion(a);
+  const hb = horasGestion(b);
+  if (ha !== hb) return ha < hb ? -1 : 1;
+
+  const pa = esPospuesta(a);
+  const pb = esPospuesta(b);
+  if (pa !== pb) return pa ? -1 : 1;
+
+  const ea = a.eventoFecha || FECHA_MAX;
+  const eb = b.eventoFecha || FECHA_MAX;
+  if (ea !== eb) return ea < eb ? -1 : 1;
+
+  return String(a.id).localeCompare(String(b.id), undefined, { numeric: true });
+};
 
 const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
   const navigate = useNavigate();
@@ -20,11 +65,16 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
 
   // Filtros de Evento y Estado
   const [filtroEvento, setFiltroEvento] = useState('todos');
-  const [filtroEstado, setFiltroEstado] = useState('todos'); 
+  const [filtroEstado, setFiltroEstado] = useState('todos');
 
   const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
   const [confirmModal, setConfirmModal] = useState({ abierto: false, gestion: null });
   const [alertaIgnorada, setAlertaIgnorada] = useState(false);
+
+  // Modal de posponer (fecha + nota)
+  const [modalPosponer, setModalPosponer] = useState({ abierto: false, gestion: null });
+  const [formPosponer, setFormPosponer] = useState({ fecha: '', nota: '' });
+  const [errorPosponer, setErrorPosponer] = useState('');
 
   const API_URL = import.meta.env.VITE_API_URL || 'https://planificador-eventos-backend.onrender.com/api';
 
@@ -127,8 +177,9 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
   };
 
   // --- DETECCIÓN AUTOMÁTICA E INTERFAZ OPTIMISTA AL REPROGRAMAR ---
-  const actualizarFechaGestion = async (eventoId, gestionId, nuevaFecha, pospuesto = true) => {
+  const actualizarFechaGestion = async (eventoId, gestionId, nuevaFecha, pospuesto = true, nota = '') => {
     const eventosAnteriores = [...eventos];
+    const notaFinal = (nota || '').trim() || 'Pospuesto por reprogramación';
 
     const eventosActualizados = eventos.map((evento) => {
       if (evento.id === eventoId) {
@@ -140,7 +191,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
                   plazo: nuevaFecha,
                   fecha: nuevaFecha,
                   estado: pospuesto ? 'pospuesto' : g.estado,
-                  nota_pospuesto: pospuesto ? 'Pospuesto por reprogramación' : g.nota_pospuesto,
+                  nota_pospuesto: pospuesto ? notaFinal : g.nota_pospuesto,
                   pospuesto
                 }
               : g
@@ -155,7 +206,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
       return evento;
     });
 
-    setEventos(eventosActualizados); 
+    setEventos(eventosActualizados);
     setAlertaIgnorada(false);
 
     try {
@@ -170,7 +221,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
         },
         body: JSON.stringify({
           plazo: nuevaFecha,
-          ...(pospuesto ? { estado: 'pospuesto', nota_pospuesto: 'Pospuesto por reprogramación', pospuesto: true } : {})
+          ...(pospuesto ? { estado: 'pospuesto', nota_pospuesto: notaFinal, pospuesto: true } : {})
         })
       });
 
@@ -183,19 +234,37 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
     }
   };
 
-  // Reprograma una subtarea al día siguiente y la marca como "Pospuesto"
-  const posponerGestion = (gestion) => {
-    if (!gestion?.eventoId) return;
+  // --- POSPONER: abre el modal para elegir fecha y dejar una nota ---
+  const abrirPosponer = (gestion) => {
+    if (!gestion || gestion.completada) return; // las completadas no se pueden posponer
+    setFormPosponer({ fecha: '', nota: '' });
+    setErrorPosponer('');
+    setModalPosponer({ abierto: true, gestion });
+  };
 
-    const manana = new Date();
-    manana.setDate(manana.getDate() + 1);
-    const yearM = manana.getFullYear();
-    const monthM = String(manana.getMonth() + 1).padStart(2, '0');
-    const dayM = String(manana.getDate()).padStart(2, '0');
-    const mananaStr = `${yearM}-${monthM}-${dayM}`;
+  const cerrarPosponer = () => {
+    setModalPosponer({ abierto: false, gestion: null });
+    setErrorPosponer('');
+  };
 
-    actualizarFechaGestion(gestion.eventoId, gestion.id, mananaStr, true);
-    mostrarMensajeTemporizado('exito', `Gestión "${gestion.descripcion}" pospuesta para mañana.`);
+  const confirmarPosponer = (e) => {
+    e.preventDefault();
+    const { gestion } = modalPosponer;
+    if (!gestion?.eventoId || gestion.completada) return;
+
+    const manana = fechaOffsetStr(1);
+
+    if (!formPosponer.fecha) {
+      setErrorPosponer('Selecciona la nueva fecha.');
+      return;
+    }
+    if (formPosponer.fecha < manana) {
+      setErrorPosponer('La nueva fecha debe ser posterior a hoy.');
+      return;
+    }
+
+    actualizarFechaGestion(gestion.eventoId, gestion.id, formPosponer.fecha, true, formPosponer.nota);
+    cerrarPosponer();
   };
 
   const handleVerDetalle = (eventoId, state = {}) => {
@@ -226,18 +295,40 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
         ...g,
         eventoId: e.id,
         eventoNombre: e.nombre,
+        eventoFecha: (e.fecha || '').toString().split('T')[0].split(' ')[0],
         limiteDiarioHoras: parseFloat(e.limite_diario_horas || e.limiteDiarioHoras || 6.0)
       }));
     });
   }, [eventos]);
 
-  const { 
-    gestionesFiltradas, 
-    gestionesAtrasadas, 
-    gestionesHoy, 
-    gestionesProximas,
-    gestionesCompletadas
+  const {
+    gestionesFiltradas,
+    gestionesAtrasadas: atrasadasRaw,
+    gestionesHoy: hoyRaw,
+    gestionesProximas: proximasRaw,
+    gestionesCompletadas: completadasRaw
   } = useFiltradoGestiones(todasLasGestiones, filtroEstado);
+
+  // Cada grupo queda ordenado por prioridad, hasta la subtarea más mínima
+  const gestionesAtrasadas = useMemo(() => [...atrasadasRaw].sort(compararPrioridad), [atrasadasRaw]);
+  const gestionesHoy = useMemo(() => [...hoyRaw].sort(compararPrioridad), [hoyRaw]);
+  const gestionesProximas = useMemo(() => [...proximasRaw].sort(compararPrioridad), [proximasRaw]);
+  // Completadas: las más recientes primero
+  const gestionesCompletadas = useMemo(
+    () => [...completadasRaw].sort((a, b) => compararPrioridad(b, a)),
+    [completadasRaw]
+  );
+
+  // Número de prioridad global: atrasadas → hoy → próximas
+  const prioridadPorId = useMemo(() => {
+    const mapa = {};
+    [...gestionesAtrasadas, ...gestionesHoy, ...gestionesProximas]
+      .filter((g) => !g.completada)
+      .forEach((g, i) => {
+        mapa[g.id] = i + 1;
+      });
+    return mapa;
+  }, [gestionesAtrasadas, gestionesHoy, gestionesProximas]);
 
   // 1. Filtrar las gestiones únicamente por la categoría de evento/estado seleccionada en la vista
   const gestionesSegunFiltro = useMemo(() => {
@@ -281,18 +372,21 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
       const tareasPendientesHoy = gestionesHoy.filter((g) => !g.completada);
       if (tareasPendientesHoy.length > 0) {
         const ultimaTarea = tareasPendientesHoy[tareasPendientesHoy.length - 1];
-        const manana = new Date();
-        manana.setDate(manana.getDate() + 1);
-        const yearM = manana.getFullYear();
-        const monthM = String(manana.getMonth() + 1).padStart(2, '0');
-        const dayM = String(manana.getDate()).padStart(2, '0');
-        const mananaStr = `${yearM}-${monthM}-${dayM}`;
+        const mananaStr = fechaOffsetStr(1);
 
         actualizarFechaGestion(ultimaTarea.eventoId, ultimaTarea.id, mananaStr, true);
         mostrarMensajeTemporizado('exito', `Solución aplicada: "${ultimaTarea.descripcion}" se movió para mañana.`);
       }
     }
   };
+
+  // Límites del selector de fecha del modal de posponer
+  const gestionAPosponer = modalPosponer.gestion;
+  const minPosponer = fechaOffsetStr(1);
+  const maxPosponer =
+    gestionAPosponer?.eventoFecha && gestionAPosponer.eventoFecha >= minPosponer
+      ? gestionAPosponer.eventoFecha
+      : undefined;
 
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-6xl mx-auto space-y-6 bg-slate-50/50 min-h-screen text-slate-800 text-left font-sans">
@@ -469,7 +563,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
               </div>
 
               {/* MOTOR DE ALERTA AUTOMÁTICO DE SOBRECARGA */}
-              <CargaGestionWidget 
+              <CargaGestionWidget
                 horasTotalesHoy={horasTotalesHoy}
                 limiteDiarioMax={limiteDiarioMax}
                 alertaIgnorada={alertaIgnorada}
@@ -487,7 +581,7 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
                     ?
                   </div>
                   <p>
-                    Tus subtareas se agrupan por urgencia. Dentro de cada grupo, verás primero las más antiguas; si coinciden en fecha, te sugerimos iniciar por la que tome menos tiempo.
+                    Tus subtareas se agrupan por urgencia y cada una tiene su número de prioridad. Dentro de cada grupo van primero las de fecha más antigua; si coinciden, la que toma menos horas; si aún empatan, las pospuestas y luego las del evento con fecha límite más cercana.
                   </p>
                 </div>
               </div>
@@ -527,8 +621,8 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
                               key={gestion.id}
                               gestion={gestion}
                               solicitarCompletar={solicitarCompletar}
-                              handleVerDetalle={handleVerDetalle}
-                              posponerGestion={posponerGestion}
+                              onPosponer={abrirPosponer}
+                              prioridad={prioridadPorId[gestion.id]}
                               etiqueta="Atrasada"
                               colorTag="bg-red-100 text-red-700 border border-red-200"
                               esAtrasada={true}
@@ -562,8 +656,8 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
                               key={gestion.id}
                               gestion={gestion}
                               solicitarCompletar={solicitarCompletar}
-                              handleVerDetalle={handleVerDetalle}
-                              posponerGestion={posponerGestion}
+                              onPosponer={abrirPosponer}
+                              prioridad={prioridadPorId[gestion.id]}
                               etiqueta="Para hoy"
                               colorTag="bg-cyan-100 text-cyan-800"
                             />
@@ -596,8 +690,8 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
                               key={gestion.id}
                               gestion={gestion}
                               solicitarCompletar={solicitarCompletar}
-                              handleVerDetalle={handleVerDetalle}
-                              posponerGestion={posponerGestion}
+                              onPosponer={abrirPosponer}
+                              prioridad={prioridadPorId[gestion.id]}
                               etiqueta="Próxima"
                               colorTag="bg-slate-100 text-slate-600"
                               esProxima={true}
@@ -631,7 +725,6 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
                               key={gestion.id}
                               gestion={gestion}
                               solicitarCompletar={solicitarCompletar}
-                              handleVerDetalle={handleVerDetalle}
                               etiqueta="Completada"
                               colorTag="bg-emerald-100 text-emerald-800"
                             />
@@ -677,21 +770,114 @@ const Hoy = ({ onVerDetalle, onCrearEvento, setPestanaActiva }) => {
           </div>
         </div>
       )}
+
+      {/* Modal: Posponer subtarea (fecha + nota) */}
+      {modalPosponer.abierto && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-xl shadow-2xl border border-slate-100 text-left">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h3 className="text-2xl font-semibold text-[#1e2b4d]">Posponer subtarea</h3>
+                <p className="text-sm text-slate-500 mt-1 truncate">
+                  {gestionAPosponer?.descripcion}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={cerrarPosponer}
+                className="p-1 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                aria-label="Cerrar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={confirmarPosponer} className="mt-6 space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Nueva fecha <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  <input
+                    type="date"
+                    min={minPosponer}
+                    max={maxPosponer}
+                    className={`w-full pl-11 pr-4 py-3.5 border rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 transition ${
+                      errorPosponer
+                        ? 'bg-red-50/70 border-red-400 focus:ring-red-400'
+                        : 'bg-white border-slate-200 focus:ring-purple-600 focus:border-purple-600'
+                    }`}
+                    value={formPosponer.fecha}
+                    onChange={(e) => {
+                      setFormPosponer({ ...formPosponer, fecha: e.target.value });
+                      setErrorPosponer('');
+                    }}
+                  />
+                </div>
+                {errorPosponer && (
+                  <p className="text-xs text-red-600 mt-2 font-medium">{errorPosponer}</p>
+                )}
+                {maxPosponer && (
+                  <p className="text-[11px] text-slate-400 mt-1.5">
+                    Puedes elegir hasta la fecha límite del evento.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Nota <span className="text-slate-400 font-normal">(opcional)</span>
+                </label>
+                <textarea
+                  rows={3}
+                  maxLength={300}
+                  placeholder="Ej. Esperando respuesta del proveedor"
+                  className="w-full px-4 py-3.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-purple-600 transition resize-none"
+                  value={formPosponer.nota}
+                  onChange={(e) => setFormPosponer({ ...formPosponer, nota: e.target.value })}
+                />
+                <p className="text-[11px] text-slate-400 mt-1 text-right">
+                  {formPosponer.nota.length}/300
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-5 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={cerrarPosponer}
+                  className="px-6 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium text-sm rounded-xl transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-3 bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-semibold text-sm rounded-xl shadow-sm transition cursor-pointer"
+                >
+                  Posponer
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 // --- COMPONENTE TARJETA GESTION (LECTURA DE FECHA) ---
-const TarjetaGestion = ({ gestion, solicitarCompletar, handleVerDetalle, posponerGestion, etiqueta, colorTag, esAtrasada, esProxima }) => {
+const TarjetaGestion = ({ gestion, solicitarCompletar, onPosponer, etiqueta, colorTag, esAtrasada, esProxima, prioridad }) => {
   const fechaValor = gestion.plazo || gestion.fecha;
 
-  // Evalúa cualquier flag enviado por la API o estado local
-  const pospuestoAhora = Boolean(
-    gestion.nota_pospuesto || 
-    gestion.estado === 'pospuesto' || 
-    gestion.pospuesto || 
-    gestion.reprogramado
-  );
+  // Una subtarea completada nunca se muestra como pospuesta
+  const pospuestoAhora =
+    !gestion.completada &&
+    Boolean(
+      gestion.nota_pospuesto ||
+      gestion.estado === 'pospuesto' ||
+      gestion.pospuesto ||
+      gestion.reprogramado
+    );
 
   // Formatear la fecha a texto amigable (ej: "11 sep. 2026")
   const formatearFecha = (fechaStr) => {
@@ -722,13 +908,28 @@ const TarjetaGestion = ({ gestion, solicitarCompletar, handleVerDetalle, pospone
     <div
       className={`bg-white border rounded-2xl p-4 shadow-sm flex items-center justify-between transition border-l-4 ${borderStyle} border-slate-200 hover:shadow-md`}
     >
-      <div className="space-y-1.5 flex-1">
+      <div className="space-y-1.5 flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Número de prioridad (solo pendientes) */}
+          {!gestion.completada && prioridad && (
+            <span
+              className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                prioridad === 1
+                  ? 'bg-purple-700 text-white border-purple-700'
+                  : 'bg-white text-slate-600 border-slate-200'
+              }`}
+              title="Prioridad"
+            >
+              #{prioridad}
+              {prioridad === 1 && <span>· Empieza por aquí</span>}
+            </span>
+          )}
+
           <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-500 text-xs font-semibold px-2.5 py-0.5 rounded-md">
             <Calendar className="w-3.5 h-3.5 text-purple-500" /> {gestion.eventoNombre}
           </span>
-          
-          {/* Etiqueta Pospuesto solo en la tarjeta de Hoy */}
+
+          {/* Etiqueta Pospuesto: solo en subtareas NO completadas */}
           {pospuestoAhora && (
             <span className="bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
               Pospuesto
@@ -768,6 +969,13 @@ const TarjetaGestion = ({ gestion, solicitarCompletar, handleVerDetalle, pospone
             </span>
           )}
         </div>
+
+        {/* Nota del pospuesto (solo si no está completada) */}
+        {pospuestoAhora && gestion.nota_pospuesto && (
+          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5 w-fit max-w-full">
+            <span className="font-semibold">Nota:</span> {gestion.nota_pospuesto}
+          </p>
+        )}
       </div>
 
       <div className="flex items-center gap-2 flex-shrink-0 ml-4">
@@ -784,13 +992,13 @@ const TarjetaGestion = ({ gestion, solicitarCompletar, handleVerDetalle, pospone
           <span>{gestion.completada ? 'Completada' : 'Hecha'}</span>
         </button>
 
-        {/* Botón Posponer: solo navega al detalle del evento para posponerlo allí */}
+        {/* Botón Posponer: abre el modal para elegir fecha y dejar una nota */}
         {!gestion.completada && (
           <button
             type="button"
-            onClick={() => handleVerDetalle(gestion.eventoId || gestion.evento, { esPosponer: true })}
+            onClick={() => onPosponer(gestion)}
             className="px-3 py-2 text-xs font-bold text-slate-500 hover:text-purple-800 hover:bg-purple-50 border border-slate-200 hover:border-purple-200 rounded-xl transition cursor-pointer"
-            title="Posponer evento"
+            title="Posponer subtarea"
           >
             Posponer
           </button>

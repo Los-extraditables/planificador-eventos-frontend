@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle2, Clock, Info, Plus, Trash2 } from 'lucide-react';
+import { AlertCircle, Clock, Info, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
@@ -26,6 +26,8 @@ const CrearEvento = ({ onEventoCreado }) => {
   ]);
 
   const [cargando, setCargando] = useState(false);
+  const [bannerError, setBannerError] = useState(false);
+  const [toastError, setToastError] = useState(false);
   const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
   const [errores, setErrores] = useState({});
 
@@ -36,11 +38,6 @@ const CrearEvento = ({ onEventoCreado }) => {
     navigate('/login');
   };
 
-  const mostrarMensaje = (tipo, texto) => {
-    setMensaje({ tipo, texto });
-    setTimeout(() => setMensaje({ tipo: '', texto: '' }), 5000);
-  };
-
   const handleGestionChange = (id, field, value) => {
     setGestiones(gestiones.map(g => g.id === id ? { ...g, [field]: value } : g));
   };
@@ -48,7 +45,7 @@ const CrearEvento = ({ onEventoCreado }) => {
   const handleAgregarSubtarea = () => {
     setGestiones([
       ...gestiones,
-      { id: Date.now(), descripcion: '', plazo: formEvento.fecha || hoyStr, horas_estimadas: '' }
+      { id: Date.now(), descripcion: '', plazo: '', horas_estimadas: '' }
     ]);
   };
 
@@ -60,17 +57,21 @@ const CrearEvento = ({ onEventoCreado }) => {
     setGestiones(gestiones.filter(g => g.id !== id));
   };
 
+  // --- LÓGICA DE HORAS GLOBALES Y AVISO ---
+  const limiteGlobal = parseFloat(formEvento.limite_diario_horas) || 0;
+
+  const horasAsignadasTotal = gestiones.reduce((acc, g) => {
+    const h = parseFloat(g.horas_estimadas);
+    return acc + (!isNaN(h) && h > 0 ? h : 0);
+  }, 0);
+
+  const hayExcesoGlobal = limiteGlobal > 0 && horasAsignadasTotal > limiteGlobal;
+
   const validarFormulario = () => {
     const nuevosErrores = {};
 
-    if (!formEvento.nombre.trim()) {
-      nuevosErrores.nombre = 'Este campo es obligatorio.';
-    }
-
-    if (!formEvento.tipo) {
-      nuevosErrores.tipo = 'Selecciona un tipo.';
-    }
-
+    if (!formEvento.nombre.trim()) nuevosErrores.nombre = 'Este campo es obligatorio.';
+    if (!formEvento.tipo) nuevosErrores.tipo = 'Selecciona un tipo.';
     if (!formEvento.fecha) {
       nuevosErrores.fecha = 'Este campo es obligatorio.';
     } else if (formEvento.fecha < hoyStr) {
@@ -78,61 +79,45 @@ const CrearEvento = ({ onEventoCreado }) => {
     }
 
     if (
-      formEvento.limite_diario_horas === '' || 
-      isNaN(formEvento.limite_diario_horas) || 
+      formEvento.limite_diario_horas === '' ||
+      isNaN(formEvento.limite_diario_horas) ||
       parseFloat(formEvento.limite_diario_horas) <= 0
     ) {
       nuevosErrores.limite_diario_horas = 'Ingresa un número mayor a 0.';
     }
 
     setErrores(nuevosErrores);
-    return Object.keys(nuevosErrores).length === 0;
+    return Object.keys(nuevosErrores).length === 0 && !hayExcesoGlobal;
+  };
+
+  // Muestra el banner y lo oculta solo a los 3 segundos
+  const mostrarBanner = () => {
+    setBannerError(true);
+    setToastError(true);
+    setTimeout(() => setBannerError(false), 3000);
+    setTimeout(() => setToastError(false), 5000);
+  };
+
+  const limpiarFormulario = () => {
+    setFormEvento({ nombre: '', tipo: '', fecha: '', limite_diario_horas: '' });
+    setGestiones([{ id: Date.now(), descripcion: '', plazo: '', horas_estimadas: '' }]);
+    setErrores({});
+    setBannerError(false);
+    setToastError(false);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!validarFormulario()) {
-      mostrarMensaje('error', 'Por favor completa los campos requeridos correctamente.');
+      setMensaje({ tipo: '', texto: '' });
+      mostrarBanner();
       return;
     }
 
-    const limiteHoras = parseFloat(formEvento.limite_diario_horas) || 6;
-
-    // Validar que la suma total de horas estimadas de las subtareas
-    // no supere el límite del evento
     const gestionesConDescripcion = gestiones.filter(
       g => g.descripcion && g.descripcion.trim() !== ''
     );
-
-    let totalHorasSubtareas = 0;
-    for (let i = 0; i < gestionesConDescripcion.length; i++) {
-      const g = gestionesConDescripcion[i];
-      const plazoGestion = g.plazo || formEvento.fecha;
-
-      if (plazoGestion && plazoGestion < hoyStr) {
-        mostrarMensaje('error', `La subtarea "${g.descripcion}" no puede tener un plazo anterior a la fecha actual.`);
-        return;
-      }
-      if (formEvento.fecha && plazoGestion && plazoGestion > formEvento.fecha) {
-        mostrarMensaje('error', `La subtarea "${g.descripcion}" no puede tener un plazo posterior a la fecha del evento (${formEvento.fecha}).`);
-        return;
-      }
-
-      const hrs = parseFloat(g.horas_estimadas);
-      if (!isNaN(hrs) && hrs > 0) {
-        totalHorasSubtareas += hrs;
-      }
-    }
-
-    if (totalHorasSubtareas > limiteHoras) {
-      mostrarMensaje(
-        'error',
-        `Las horas estimadas de las subtareas (${totalHorasSubtareas}h) superan la duración máxima establecida para este evento (${limiteHoras}h). Reduce las horas de una o varias subtareas para continuar.`
-      );
-      return;
-    }
-
 
     const token = localStorage.getItem('token') || authService.getToken();
 
@@ -146,20 +131,18 @@ const CrearEvento = ({ onEventoCreado }) => {
     try {
       const baseUrl = API_URL.endsWith('/') ? API_URL : `${API_URL}/`;
 
-      const gestionesValidas = gestiones
-        .filter(g => g.descripcion && g.descripcion.trim() !== '')
-        .map(g => ({
-          descripcion: g.descripcion.trim(),
-          plazo: g.plazo || formEvento.fecha,
-          horas_estimadas: parseFloat(g.horas_estimadas) || 0,
-          completada: false
-        }));
+      const gestionesValidas = gestionesConDescripcion.map(g => ({
+        descripcion: g.descripcion.trim(),
+        plazo: g.plazo || formEvento.fecha,
+        horas_estimadas: parseFloat(g.horas_estimadas) || 0,
+        completada: false
+      }));
 
       const payload = {
         nombre: formEvento.nombre.trim(),
         tipo: formEvento.tipo,
         fecha: formEvento.fecha,
-        limite_diario_horas: limiteHoras,
+        limite_diario_horas: limiteGlobal,
         gestiones: gestionesValidas
       };
 
@@ -194,72 +177,78 @@ const CrearEvento = ({ onEventoCreado }) => {
         throw new Error(formatearError(errData));
       }
 
-      mostrarMensaje('exito', '¡Evento y plan inicial creados con éxito!');
-
-      setFormEvento({ nombre: '', tipo: '', fecha: '', limite_diario_horas: '' });
-      setGestiones([{ id: Date.now(), descripcion: '', plazo: '', horas_estimadas: '' }]);
-      setErrores({});
+      setMensaje({ tipo: 'exito', texto: '¡Evento y plan inicial creados con éxito!' });
+      limpiarFormulario();
 
       if (onEventoCreado) onEventoCreado();
-
     } catch (err) {
-      mostrarMensaje('error', err.message);
+      mostrarBanner();
     } finally {
       setCargando(false);
     }
   };
 
-  return (
-    <div className="max-w-5xl mx-auto p-4 sm:p-6 md:p-8 font-sans text-slate-800 text-left bg-slate-50/50 min-h-screen">
-      
-      {/* Encabezado Principal */}
-      <div className="mb-6">
-        <p className="text-xs sm:text-sm text-slate-500">
-          Registra los datos generales del evento y añade sus subtareas.
-        </p>
-      </div>
+  // Clases base de los inputs del evento (campo con error = fondo rosado + borde rojo)
+  const inputBase =
+    'w-full px-4 py-3 rounded-xl text-sm transition-all border focus:outline-none focus:ring-2';
+  const inputOk =
+    'bg-[#F8FAFC] border-slate-200 text-slate-800 focus:bg-white focus:ring-purple-600';
+  const inputErr =
+    'bg-red-50/70 border-red-400 text-slate-800 placeholder:text-red-300 focus:ring-red-400';
 
-      {/* Alerta de Mensajes / Errores */}
-      {mensaje.texto && (
-        <div className={`p-4 rounded-2xl mb-6 text-sm font-semibold flex items-center justify-between gap-3 shadow-sm transition-all ${
-          mensaje.tipo === 'exito' 
-            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-            : 'bg-red-50 text-red-700 border border-red-200'
-        }`}>
-          <div className="flex items-center gap-2.5">
-            {mensaje.tipo === 'exito' ? (
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-            ) : (
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-            )}
-            <span>{mensaje.texto}</span>
-          </div>
+  return (
+    <div className="relative max-w-5xl mx-auto p-4 sm:p-6 md:p-8 font-sans text-slate-800 text-left bg-slate-50/50 min-h-screen">
+      {/* TOAST FLOTANTE ROJO (SUPERIOR DERECHO) */}
+      {toastError && (
+        <div
+          role="alert"
+          className="fixed top-5 right-5 z-50 flex items-center gap-3 bg-red-600 text-white px-6 py-4 rounded-2xl shadow-lg text-sm font-semibold"
+        >
+          <X
+            className="w-5 h-5 cursor-pointer hover:opacity-80"
+            onClick={() => setToastError(false)}
+          />
+          <span>Por favor corrige los campos con errores.</span>
+        </div>
+      )}
+
+      {/* MENSAJE DE ÉXITO GENERAL */}
+      {mensaje.texto && mensaje.tipo === 'exito' && (
+        <div className="p-4 rounded-2xl mb-6 text-sm font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
+          {mensaje.texto}
+        </div>
+      )}
+
+      <p className="text-xs sm:text-sm text-slate-500 mb-6 font-medium">
+        Registra los datos generales del evento y añade sus subtareas.
+      </p>
+
+      {/* BANNER DE ERROR EN LÍNEA */}
+      {bannerError && (
+        <div
+          role="alert"
+          className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 px-4 py-3.5 rounded-2xl mb-6 shadow-sm text-sm font-bold"
+        >
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <span>Por favor completa los campos requeridos antes de guardar.</span>
         </div>
       )}
 
       <form onSubmit={handleSubmit} noValidate className="space-y-6">
-        
-        {/* BLOQUE 1: Datos del Evento */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-6 sm:p-8 shadow-sm space-y-6">
-          <h2 className="text-base sm:text-lg font-bold text-slate-900">
-            Datos del Evento
-          </h2>
+        {/* SECCIÓN 1: DATOS DEL EVENTO */}
+        <div className="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
+          <h2 className="text-xl font-bold text-slate-950">Datos del Evento</h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
             {/* Nombre del Evento */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-2">
+              <label className="block text-xs font-bold text-slate-800 mb-2">
                 Nombre del Evento <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 placeholder="Ej. Lanzamiento Producto X"
-                className={`w-full px-4 py-3 rounded-xl text-sm transition-all bg-[#F8FAFC] border focus:bg-white focus:outline-none ${
-                  errores.nombre 
-                    ? 'bg-red-50/50 border-red-400 text-red-900 placeholder-slate-400 focus:ring-2 focus:ring-red-400' 
-                    : 'border-slate-200 text-slate-800 focus:ring-2 focus:ring-purple-600 focus:border-transparent'
-                }`}
+                className={`${inputBase} ${errores.nombre ? inputErr : inputOk}`}
                 value={formEvento.nombre}
                 onChange={(e) => {
                   setFormEvento({ ...formEvento, nombre: e.target.value });
@@ -267,21 +256,17 @@ const CrearEvento = ({ onEventoCreado }) => {
                 }}
               />
               {errores.nombre && (
-                <p className="text-xs text-red-500 mt-1.5 font-medium">{errores.nombre}</p>
+                <p className="text-xs text-red-500 mt-2 font-medium">{errores.nombre}</p>
               )}
             </div>
 
-            {/* Tipo */}
+            {/* Tipo de Evento */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-2">
+              <label className="block text-xs font-bold text-slate-800 mb-2">
                 Tipo <span className="text-red-500">*</span>
               </label>
               <select
-                className={`w-full px-4 py-3 rounded-xl text-sm transition-all bg-[#F8FAFC] border focus:bg-white focus:outline-none cursor-pointer appearance-none ${
-                  errores.tipo 
-                    ? 'bg-red-50/50 border-red-400 text-slate-800 focus:ring-2 focus:ring-red-400' 
-                    : 'border-slate-200 text-slate-500 focus:ring-2 focus:ring-purple-600 focus:border-transparent'
-                }`}
+                className={`${inputBase} cursor-pointer ${errores.tipo ? inputErr : inputOk}`}
                 value={formEvento.tipo}
                 onChange={(e) => {
                   setFormEvento({ ...formEvento, tipo: e.target.value });
@@ -295,39 +280,33 @@ const CrearEvento = ({ onEventoCreado }) => {
                 <option value="Otro">Otro</option>
               </select>
               {errores.tipo && (
-                <p className="text-xs text-red-500 mt-1.5 font-medium">{errores.tipo}</p>
+                <p className="text-xs text-red-500 mt-2 font-medium">{errores.tipo}</p>
               )}
             </div>
 
-            {/* Fecha límite */}
+            {/* Fecha límite del Evento */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-2">
+              <label className="block text-xs font-bold text-slate-800 mb-2">
                 Fecha límite del Evento <span className="text-red-500">*</span>
               </label>
-              <div className="relative">
-                <input
-                  type="date"
-                  min={hoyStr}
-                  className={`w-full px-4 py-3 rounded-xl text-sm transition-all bg-[#F8FAFC] border focus:bg-white focus:outline-none ${
-                    errores.fecha 
-                      ? 'bg-red-50/50 border-red-400 text-slate-800 focus:ring-2 focus:ring-red-400' 
-                      : 'border-slate-200 text-slate-600 focus:ring-2 focus:ring-purple-600 focus:border-transparent'
-                  }`}
-                  value={formEvento.fecha}
-                  onChange={(e) => {
-                    setFormEvento({ ...formEvento, fecha: e.target.value });
-                    if (errores.fecha) setErrores({ ...errores, fecha: null });
-                  }}
-                />
-              </div>
+              <input
+                type="date"
+                min={hoyStr}
+                className={`${inputBase} ${errores.fecha ? inputErr : inputOk}`}
+                value={formEvento.fecha}
+                onChange={(e) => {
+                  setFormEvento({ ...formEvento, fecha: e.target.value });
+                  if (errores.fecha) setErrores({ ...errores, fecha: null });
+                }}
+              />
               {errores.fecha && (
-                <p className="text-xs text-red-500 mt-1.5 font-medium">{errores.fecha}</p>
+                <p className="text-xs text-red-500 mt-2 font-medium">{errores.fecha}</p>
               )}
             </div>
 
-            {/* Límite diario */}
+            {/* Límite diario de carga de trabajo */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-2">
+              <label className="block text-xs font-bold text-slate-800 mb-2">
                 Límite diario de carga de trabajo <span className="text-red-500">*</span>
               </label>
               <div className="relative">
@@ -336,100 +315,110 @@ const CrearEvento = ({ onEventoCreado }) => {
                   step="0.5"
                   min="0.5"
                   placeholder="Ej. 6"
-                  className={`w-full px-4 py-3 pr-24 rounded-xl text-sm transition-all bg-[#F8FAFC] border focus:bg-white focus:outline-none ${
-                    errores.limite_diario_horas 
-                      ? 'bg-red-50/50 border-red-400 text-red-900 focus:ring-2 focus:ring-red-400' 
-                      : 'border-slate-200 text-slate-800 focus:ring-2 focus:ring-purple-600 focus:border-transparent'
+                  className={`${inputBase} pr-40 ${
+                    errores.limite_diario_horas ? inputErr : inputOk
                   }`}
                   value={formEvento.limite_diario_horas}
                   onChange={(e) => {
                     setFormEvento({ ...formEvento, limite_diario_horas: e.target.value });
-                    if (errores.limite_diario_horas) setErrores({ ...errores, limite_diario_horas: null });
+                    if (errores.limite_diario_horas)
+                      setErrores({ ...errores, limite_diario_horas: null });
                   }}
                 />
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-medium flex items-center gap-1 pointer-events-none">
-                  <Clock className="w-3.5 h-3.5 text-slate-400" /> horas (límite total)
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-medium pointer-events-none flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5" /> horas (límite total)
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1 font-medium">
-                <Info className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+              <p className="text-xs text-slate-400 mt-2 font-medium flex items-center gap-1.5">
+                <Info className="w-3.5 h-3.5 shrink-0" />
                 Total máximo de horas estimadas para todas las subtareas.
               </p>
               {errores.limite_diario_horas && (
-                <p className="text-xs text-red-500 mt-1.5 font-medium">{errores.limite_diario_horas}</p>
+                <p className="text-xs text-red-500 mt-2 font-medium">
+                  {errores.limite_diario_horas}
+                </p>
               )}
             </div>
-
           </div>
         </div>
 
-        {/* BLOQUE 2: Subtareas Iniciales */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-6 sm:p-8 shadow-sm space-y-5">
+        {/* SECCIÓN 2: SUBTAREAS INICIALES */}
+        <div className="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
           <div>
-            <h2 className="text-base sm:text-lg font-bold text-slate-900">
-              Subtareas iniciales
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <h2 className="text-xl font-bold text-slate-950">Subtareas iniciales</h2>
+            <p className="text-xs text-slate-500 mt-1">
               Define las subtareas necesarias para organizar el evento.
             </p>
           </div>
 
-          {/* Banner de información Lila */}
-          <div className="bg-[#F3E8FF]/60 border border-[#E9D5FF] rounded-xl px-4 py-3 flex items-center gap-2 text-[#7E22CE] text-xs font-medium">
-            <Info className="w-4 h-4 flex-shrink-0 text-[#8B5CF6]" />
+          {/* BANNER DE AVISO OPCIONAL */}
+          <div className="bg-purple-50/60 border border-purple-100 text-purple-800 px-4 py-2.5 rounded-xl text-xs font-medium flex items-center gap-2">
+            <Info className="w-3.5 h-3.5 text-purple-600 shrink-0" />
             <span>No es obligatorio crear una subtarea</span>
           </div>
 
-          {/* Contador de horas en tiempo real */}
-          {(() => {
-            const limite = parseFloat(formEvento.limite_diario_horas);
-            const totalActual = gestiones.reduce((acc, g) => {
-              const hrs = parseFloat(g.horas_estimadas);
-              return acc + (!isNaN(hrs) && hrs > 0 ? hrs : 0);
-            }, 0);
-            const superaLimite = !isNaN(limite) && limite > 0 && totalActual > limite;
-            const tieneHoras = totalActual > 0;
-            if (!tieneHoras) return null;
-            return (
-              <div className={`rounded-xl px-4 py-3 flex items-start gap-2 text-xs font-medium border ${
-                superaLimite
-                  ? 'bg-red-50 border-red-200 text-red-700'
-                  : 'bg-emerald-50 border-emerald-200 text-emerald-700'
-              }`}>
-                {superaLimite
-                  ? <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  : <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                }
-                <span>
-                  {superaLimite
-                    ? `Las horas estimadas de las subtareas (${totalActual}h) superan la duración máxima del evento (${limite}h). Reduce las horas de una o varias subtareas para continuar.`
-                    : `Horas usadas: ${totalActual}h${!isNaN(limite) && limite > 0 ? ` de ${limite}h disponibles` : ''}.`
-                  }
-                </span>
+          {/* AVISO DINÁMICO DE CARGA DE TRABAJO */}
+          {horasAsignadasTotal > 0 && (
+            <div
+              className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+                hayExcesoGlobal
+                  ? 'bg-red-50/70 border-red-200 text-red-950'
+                  : 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Clock
+                  className={`w-4 h-4 shrink-0 ${
+                    hayExcesoGlobal ? 'text-red-600' : 'text-emerald-600'
+                  }`}
+                />
+                <p className="text-xs font-medium">
+                  {hayExcesoGlobal ? (
+                    <>
+                      Asignaste <strong>{horasAsignadasTotal} h</strong> y el límite es{' '}
+                      <strong>{limiteGlobal} h</strong>. Reduce las horas de las subtareas o
+                      aumenta el límite.
+                    </>
+                  ) : (
+                    <>
+                      Distribución correcta: <strong>{horasAsignadasTotal} horas</strong>{' '}
+                      asignadas de un límite diario de carga de trabajo de{' '}
+                      <strong>{limiteGlobal} horas</strong>.
+                    </>
+                  )}
+                </p>
               </div>
-            );
-          })()}
 
-          {/* Encabezado de columnas */}
+              {hayExcesoGlobal ? (
+                <span className="text-[11px] font-bold bg-red-100 text-red-700 px-2.5 py-1 rounded-lg shrink-0">
+                  Exceso de {(horasAsignadasTotal - limiteGlobal).toFixed(1)} horas
+                </span>
+              ) : (
+                <span className="text-[11px] font-bold bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-lg shrink-0">
+                  En rango
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* TÍTULOS DE COLUMNAS */}
           <div className="hidden sm:grid grid-cols-12 gap-3 px-1 text-slate-400 text-[11px] font-bold uppercase tracking-wider">
-            <span className="col-span-6">Nombre de la subtarea</span>
-            <span className="col-span-3">Plazo</span>
-            <span className="col-span-2">Horas Est.</span>
-            <span className="col-span-1 text-center"></span>
+            <span className="col-span-6">NOMBRE DE LA SUBTAREA</span>
+            <span className="col-span-3">PLAZO</span>
+            <span className="col-span-2">HORAS EST.</span>
+            <span className="col-span-1"></span>
           </div>
 
-          {/* Filas de Subtareas */}
-          <div className="space-y-3">
-            {gestiones.map((gest, index) => (
-              <div key={gest.id} className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center p-3 sm:p-0 bg-slate-50/50 sm:bg-transparent rounded-xl border border-slate-100 sm:border-none">
-                
-                {/* Nombre subtarea */}
+          {/* LISTADO DE SUBTAREAS */}
+          <div className="space-y-4">
+            {gestiones.map((gest) => (
+              <div key={gest.id} className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                {/* Nombre */}
                 <div className="sm:col-span-6">
-                  <label className="block sm:hidden text-[11px] font-bold text-slate-500 mb-1">Nombre de la subtarea</label>
                   <input
                     type="text"
                     placeholder="Ej. Confirmar catering"
-                    className="w-full px-4 py-2.5 bg-[#F8FAFC] border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent transition"
+                    className="w-full px-4 py-2.5 bg-[#F8FAFC] border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-600"
                     value={gest.descripcion}
                     onChange={(e) => handleGestionChange(gest.id, 'descripcion', e.target.value)}
                   />
@@ -437,40 +426,35 @@ const CrearEvento = ({ onEventoCreado }) => {
 
                 {/* Plazo */}
                 <div className="sm:col-span-3">
-                  <label className="block sm:hidden text-[11px] font-bold text-slate-500 mb-1">Plazo</label>
-                  <div className="relative">
-                    <input
-                      type="date"
-                      min={hoyStr}
-                      max={formEvento.fecha || undefined}
-                      className="w-full px-3 py-2.5 bg-[#F8FAFC] border border-slate-200 rounded-xl text-xs text-slate-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent transition"
-                      value={gest.plazo}
-                      onChange={(e) => handleGestionChange(gest.id, 'plazo', e.target.value)}
-                    />
-                  </div>
+                  <input
+                    type="date"
+                    min={hoyStr}
+                    max={formEvento.fecha || undefined}
+                    className="w-full px-3 py-2.5 bg-[#F8FAFC] border border-slate-200 rounded-xl text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-600"
+                    value={gest.plazo}
+                    onChange={(e) => handleGestionChange(gest.id, 'plazo', e.target.value)}
+                  />
                 </div>
 
                 {/* Horas estimadas */}
                 <div className="sm:col-span-2">
-                  <label className="block sm:hidden text-[11px] font-bold text-slate-500 mb-1">Horas Est.</label>
                   <input
                     type="number"
                     step="0.5"
                     min="0"
                     placeholder="Ej. 2.5"
-                    className="w-full px-3 py-2.5 bg-[#F8FAFC] border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent transition"
+                    className="w-full px-3 py-2.5 bg-[#F8FAFC] border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-600"
                     value={gest.horas_estimadas}
                     onChange={(e) => handleGestionChange(gest.id, 'horas_estimadas', e.target.value)}
                   />
                 </div>
 
-                {/* Botón eliminar */}
+                {/* Eliminar */}
                 <div className="sm:col-span-1 flex justify-end sm:justify-center">
                   <button
                     type="button"
                     onClick={() => handleEliminarSubtarea(gest.id)}
-                    className="text-slate-400 hover:text-red-500 p-2 rounded-xl hover:bg-red-50 transition cursor-pointer"
-                    title="Eliminar subtarea"
+                    className="text-slate-400 hover:text-slate-600 transition cursor-pointer"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -479,39 +463,33 @@ const CrearEvento = ({ onEventoCreado }) => {
             ))}
           </div>
 
-          {/* Botón agregar subtarea */}
           <button
             type="button"
             onClick={handleAgregarSubtarea}
-            className="pt-2 text-[#8B5CF6] font-bold text-xs hover:text-purple-800 inline-flex items-center gap-1.5 transition cursor-pointer"
+            className="text-[#8B5CF6] font-bold text-xs hover:text-purple-800 inline-flex items-center gap-1.5 transition cursor-pointer pt-2"
           >
             <Plus className="w-4 h-4" /> Agregar otra subtarea
           </button>
         </div>
 
-        {/* Botones de Acción inferior */}
-        <div className="flex items-center justify-end gap-3 pt-2">
+        {/* BOTONES FINALES */}
+        <div className="flex items-center justify-end gap-3 pt-4">
           <button
             type="button"
-            onClick={() => {
-              setFormEvento({ nombre: '', tipo: '', fecha: '', limite_diario_horas: '' });
-              setGestiones([{ id: Date.now(), descripcion: '', plazo: '', horas_estimadas: '' }]);
-              setErrores({});
-            }}
-            className="px-5 py-2.5 border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-sm transition cursor-pointer"
+            onClick={limpiarFormulario}
+            className="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold rounded-xl text-sm transition cursor-pointer"
           >
             Limpiar Formulario
           </button>
-          
+
           <button
             type="submit"
             disabled={cargando}
-            className="px-6 py-2.5 bg-[#7E22CE] hover:bg-[#6B21A8] text-white font-bold rounded-xl text-sm transition shadow-sm disabled:opacity-50 cursor-pointer"
+            className="px-6 py-2.5 bg-purple-700 hover:bg-purple-800 text-white font-semibold rounded-xl text-sm transition shadow-sm disabled:opacity-50 cursor-pointer"
           >
-            {cargando ? 'Guardando Evento...' : 'Guardar Evento'}
+            {cargando ? 'Guardando...' : 'Guardar Evento'}
           </button>
         </div>
-
       </form>
     </div>
   );
