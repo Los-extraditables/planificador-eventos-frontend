@@ -10,6 +10,7 @@ import {
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
+// Campo reutilizable para las contraseñas
 const PasswordField = ({
   id,
   etiqueta,
@@ -19,7 +20,7 @@ const PasswordField = ({
   setVisible,
   disabled,
 }) => (
-  <div className="w-full">
+  <div className="w-full min-w-0">
     <label
       htmlFor={id}
       className="block text-sm font-semibold text-slate-700 mb-2"
@@ -27,7 +28,7 @@ const PasswordField = ({
       {etiqueta}
     </label>
 
-    <div className="relative">
+    <div className="relative w-full">
       <input
         id={id}
         type={visible ? 'text' : 'password'}
@@ -38,7 +39,7 @@ const PasswordField = ({
         placeholder="Mínimo 8 caracteres"
         value={valor}
         onChange={(e) => setValor(e.target.value)}
-        className="w-full min-w-0 px-4 py-3.5 pr-12
+        className="w-full min-w-0 px-4 py-3 pr-12
           border border-slate-300 rounded-2xl
           text-base text-slate-900 bg-white
           placeholder:text-slate-400
@@ -54,7 +55,7 @@ const PasswordField = ({
         disabled={disabled}
         title={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
         aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-        className="absolute right-3 top-1/2
+        className="absolute right-2 top-1/2
           -translate-y-1/2 p-2 rounded-lg
           text-slate-400 hover:text-slate-600
           focus:outline-none focus:ring-2
@@ -94,6 +95,8 @@ const ResetPasswordPage = () => {
   const API_URL = rawApiUrl.endsWith('/')
     ? rawApiUrl.slice(0, -1)
     : rawApiUrl;
+
+  const enlaceInvalido = !rawUid || !rawToken;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -156,7 +159,8 @@ const ResetPasswordPage = () => {
 
       setMensaje({
         tipo: 'exito',
-        texto: '¡Contraseña restablecida con éxito! Redirigiendo al login...',
+        texto:
+          '¡Contraseña restablecida con éxito! Redirigiendo al login...',
       });
 
       setTimeout(() => {
@@ -172,27 +176,25 @@ const ResetPasswordPage = () => {
     }
   };
 
-  const enlaceInvalido = !rawUid || !rawToken;
-
   return (
-    <main className="min-h-screen w-full min-w-0
-      bg-slate-50 flex flex-col items-center justify-center
-      px-4 py-8 sm:px-6 sm:py-10">
-
+    <main
+      className="min-h-screen w-full min-w-0
+        bg-slate-50 flex flex-col items-center justify-center
+        px-4 py-6 sm:px-6 sm:py-8"
+    >
       {/* Tarjeta principal */}
-      <section className="w-full max-w-xl min-w-0
-        bg-white rounded-[28px] sm:rounded-[32px]
-        border border-slate-200/80
-        shadow-[0_18px_45px_-20px_rgba(15,23,42,0.22)]
-        px-5 py-8
-        sm:px-10 sm:py-10
-        md:px-12 md:py-12">
-
-        {/* Logo y marca */}
-        <div className="flex items-center gap-4 mb-8 sm:mb-10">
+      <section
+        className="w-full max-w-lg min-w-0
+          bg-white rounded-[28px]
+          border border-slate-200/80
+          shadow-[0_18px_45px_-20px_rgba(15,23,42,0.22)]
+          px-5 py-7
+          sm:px-8 sm:py-8"
+      >
+        {/* Logo y nombre */}
+        <div className="flex items-center gap-3 mb-7">
           <div
-            className="w-12 h-12 sm:w-14 sm:h-14
-              shrink-0 rounded-2xl
+            className="w-12 h-12 shrink-0 rounded-2xl
               bg-gradient-to-br from-[#253C75] via-[#176A87]
               to-[#10BFA5] flex items-center justify-center
               shadow-sm"
@@ -200,7 +202,7 @@ const ResetPasswordPage = () => {
           >
             <svg
               viewBox="0 0 40 40"
-              className="w-8 h-8 sm:w-9 sm:h-9"
+              className="w-8 h-8"
               fill="none"
               aria-hidden="true"
             >
@@ -223,37 +225,40 @@ const ResetPasswordPage = () => {
             </svg>
           </div>
 
-          <span className="text-2xl sm:text-3xl
-            font-extrabold tracking-tight text-slate-900">
+          <span className="text-2xl font-extrabold
+            tracking-tight text-slate-900">
             Evora
           </span>
         </div>
 
-        {/* Encabezado */}
-        <div className="flex flex-col gap-3 mb-8">
-          <h1 className="text-2xl sm:text-3xl
-            font-bold tracking-tight text-slate-950
-            leading-tight">
+        {/* Título y descripción */}
+        <div className="flex flex-col gap-3 mb-6">
+          <h1
+            className="text-2xl sm:text-[28px]
+              font-bold tracking-tight text-slate-950
+              leading-tight text-left"
+          >
             {enlaceInvalido
               ? 'Enlace inválido'
               : 'Restablecer contraseña'}
           </h1>
 
-          <p className="text-base sm:text-lg
-            text-slate-500 leading-7">
+          <p className="text-base text-slate-500 leading-7 text-left">
             {enlaceInvalido
               ? 'El enlace no contiene los datos necesarios. Solicita uno nuevo para restablecer tu contraseña.'
               : 'Ingresa tu nueva contraseña para actualizar la cuenta.'}
           </p>
         </div>
 
-        {/* Mensajes de estado */}
+        {/* Mensaje de error o éxito */}
         {mensaje.texto && (
           <div
             role={mensaje.tipo === 'exito' ? 'status' : 'alert'}
-            aria-live={mensaje.tipo === 'exito' ? 'polite' : 'assertive'}
-            className={`mb-6 w-full min-w-0 p-4 rounded-2xl
-              border flex items-start gap-3 text-sm
+            aria-live={
+              mensaje.tipo === 'exito' ? 'polite' : 'assertive'
+            }
+            className={`mb-5 w-full min-w-0 p-3.5 rounded-xl
+              border flex items-start gap-2 text-sm
               ${
                 mensaje.tipo === 'exito'
                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -261,9 +266,13 @@ const ResetPasswordPage = () => {
               }`}
           >
             {mensaje.tipo === 'exito' ? (
-              <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
+              <CheckCircle2
+                className="w-5 h-5 shrink-0 mt-0.5"
+              />
             ) : (
-              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+              <AlertCircle
+                className="w-5 h-5 shrink-0 mt-0.5"
+              />
             )}
 
             <span className="flex-1 min-w-0 break-words">
@@ -273,7 +282,9 @@ const ResetPasswordPage = () => {
             {mensaje.tipo === 'error' && (
               <button
                 type="button"
-                onClick={() => setMensaje({ tipo: '', texto: '' })}
+                onClick={() =>
+                  setMensaje({ tipo: '', texto: '' })
+                }
                 aria-label="Cerrar aviso"
                 className="font-bold shrink-0"
               >
@@ -283,23 +294,22 @@ const ResetPasswordPage = () => {
           </div>
         )}
 
+        {/* Formulario o enlace inválido */}
         {enlaceInvalido ? (
-          <div className="flex flex-col gap-5">
-            <Link
-              to="/forgot-password"
-              className="w-full min-h-12 px-4 py-3
-                bg-[#7C3AED] hover:bg-[#6D28D9]
-                text-white font-semibold rounded-2xl
-                flex items-center justify-center
-                text-center transition"
-            >
-              Solicitar un enlace nuevo
-            </Link>
-          </div>
+          <Link
+            to="/forgot-password"
+            className="w-full min-h-12 px-4 py-3
+              bg-[#7C3AED] hover:bg-[#6D28D9]
+              text-white font-semibold rounded-xl
+              flex items-center justify-center
+              text-center text-sm transition"
+          >
+            Solicitar un enlace nuevo
+          </Link>
         ) : (
           <form
             onSubmit={handleSubmit}
-            className="w-full min-w-0 flex flex-col gap-6"
+            className="w-full min-w-0 flex flex-col gap-5"
           >
             <PasswordField
               id="nueva-password"
@@ -325,11 +335,11 @@ const ResetPasswordPage = () => {
               type="submit"
               disabled={cargando}
               aria-busy={cargando}
-              className="w-full min-h-14 px-4 py-3.5 mt-1
+              className="w-full min-h-12 px-4 py-3 mt-1
                 bg-[#7C3AED] hover:bg-[#6D28D9]
-                text-white font-bold text-base
-                rounded-2xl transition
-                shadow-[0_10px_20px_-10px_rgba(124,58,237,0.65)]
+                text-white font-semibold text-sm sm:text-base
+                rounded-xl transition
+                shadow-[0_8px_18px_-10px_rgba(124,58,237,0.65)]
                 flex items-center justify-center gap-2
                 disabled:opacity-60 disabled:cursor-not-allowed
                 focus:outline-none focus:ring-2
@@ -337,8 +347,10 @@ const ResetPasswordPage = () => {
             >
               {cargando ? (
                 <>
-                  <span className="w-5 h-5 border-2 border-white
-                    border-t-transparent rounded-full animate-spin" />
+                  <span
+                    className="w-4 h-4 border-2 border-white
+                      border-t-transparent rounded-full animate-spin"
+                  />
                   Procesando...
                 </>
               ) : (
@@ -349,23 +361,22 @@ const ResetPasswordPage = () => {
         )}
 
         {/* Volver al inicio de sesión */}
-        <div className="mt-7 sm:mt-8 text-center">
+        <div className="mt-6 text-center">
           <Link
             to="/login"
             className="inline-flex items-center justify-center
-              gap-2 text-sm sm:text-base
+              gap-1.5 text-sm sm:text-base
               font-bold text-purple-600 hover:text-purple-800
               hover:underline"
           >
-            <ArrowLeft className="w-5 h-5 shrink-0" />
+            <ArrowLeft className="w-4 h-4 shrink-0" />
             Volver a iniciar sesión
           </Link>
         </div>
       </section>
 
       {/* Pie de página */}
-      <footer className="mt-6 sm:mt-8 text-center
-        text-sm sm:text-base text-slate-600">
+      <footer className="mt-5 text-center text-sm text-slate-600">
         Evora · 2026
       </footer>
     </main>
