@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import OnboardingTour from '../components/OnboardingTour';
 
-// Título de la pestaña según la ruta: es lo primero que anuncia un lector de pantalla al navegar.
+// Título de la pestaña según la ruta.
 const TITULOS = [
   ['/hoy', 'Hoy'],
   ['/crear', 'Crear evento'],
@@ -12,7 +13,10 @@ const TITULOS = [
 ];
 
 const tituloDeRuta = (pathname) => {
-  const coincide = TITULOS.find(([ruta]) => pathname === ruta || pathname.startsWith(`${ruta}/`));
+  const coincide = TITULOS.find(
+    ([ruta]) => pathname === ruta || pathname.startsWith(`${ruta}/`)
+  );
+
   return coincide ? `${coincide[1]} – Evora` : 'Evora';
 };
 
@@ -21,26 +25,27 @@ export const MainLayout = () => {
   const mainRef = useRef(null);
   const primeraCarga = useRef(true);
 
-  // Al cambiar de ruta: actualiza el título y mueve el foco al contenido
-  // (en una SPA el navegador no lo hace solo, y el usuario de teclado quedaría en el menú).
+  // Actualiza el título y mueve el foco al contenido al cambiar de ruta.
   useEffect(() => {
     document.title = tituloDeRuta(pathname);
+
     if (primeraCarga.current) {
       primeraCarga.current = false;
       return;
     }
+
     mainRef.current?.focus();
   }, [pathname]);
 
   const saltarAlContenido = (e) => {
-    e.preventDefault(); // evita que el router interprete el # como navegación
+    e.preventDefault();
     mainRef.current?.focus();
     mainRef.current?.scrollIntoView();
   };
 
   return (
     <>
-      {/* Primer elemento enfocable: solo se ve al recibir foco con Tab */}
+      {/* Acceso directo al contenido principal para teclado y lectores de pantalla */}
       <a
         href="#contenido-principal"
         onClick={saltarAlContenido}
@@ -51,7 +56,15 @@ export const MainLayout = () => {
 
       <Navbar />
 
-      <main id="contenido-principal" ref={mainRef} tabIndex={-1} className="focus:outline-none">
+      {/* Tutorial interactivo: se monta una sola vez en el diseño principal */}
+      <OnboardingTour />
+
+      <main
+        id="contenido-principal"
+        ref={mainRef}
+        tabIndex={-1}
+        className="focus:outline-none"
+      >
         <Outlet />
       </main>
     </>

@@ -1,0 +1,674 @@
+/* ==========================================================================
+   Evora · Tour de bienvenida premium
+   Estructura:
+     1. Variables
+     2. Apertura (iris, destello, cámara)
+     3. Visor holográfico
+     4. Tarjeta
+     5. Entradas y salidas 3D
+     6. Cambio de página
+     7. Celebración final
+     8. Responsive
+     9. Movimiento reducido
+   Todas las clases usan el prefijo "evora-" y el popover usa
+   "evora-tour-premium", por lo que no choca con estilos antiguos.
+   ========================================================================== */
+
+/* ---------- 1. Variables ---------- */
+
+@property --evora-ang {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+:root {
+  --evora-cian: #22d3ee;
+  --evora-turquesa: #06b6d4;
+  --evora-profundo: #087f98;
+  --evora-menta: #5eead4;
+  --evora-hielo: #a5f3fc;
+  --evora-tinta: #0b1f2a;
+  --evora-texto: #42566a;
+}
+
+/* ---------- 2. Apertura ---------- */
+
+/* Iris: el fondo oscuro se abre desde el elemento resaltado */
+.driver-overlay {
+  animation: evora-iris 1s cubic-bezier(0.65, 0, 0.35, 1) backwards;
+}
+
+@keyframes evora-iris {
+  from { clip-path: circle(0px at var(--evora-cx, 50%) var(--evora-cy, 50%)); }
+  to   { clip-path: circle(150vmax at var(--evora-cx, 50%) var(--evora-cy, 50%)); }
+}
+
+/* Destello radial */
+.evora-destello {
+  position: fixed;
+  z-index: 10003;
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.95), rgba(34, 211, 238, 0.55) 35%, transparent 70%);
+  animation: evora-destello 0.95s ease-out forwards;
+}
+
+.evora-destello--final {
+  z-index: 999999998; /* detrás de la tarjeta */
+  animation: evora-destello-final 1.5s cubic-bezier(0.1, 0.7, 0.3, 1) forwards;
+}
+
+@keyframes evora-destello {
+  from { transform: scale(0); opacity: 1; }
+  to   { transform: scale(16); opacity: 0; }
+}
+
+@keyframes evora-destello-final {
+  from { transform: scale(0); opacity: 1; }
+  to   { transform: scale(42); opacity: 0; }
+}
+
+/* Cámara de página: escala + desenfoque (solo si el elemento resaltado no está dentro) */
+[data-evora-camara='salida'] {
+  transform-origin: 50% 40%;
+  transform: scale(0.965);
+  opacity: 0.55;
+  filter: blur(4px) saturate(1.2);
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease, filter 0.4s ease;
+}
+
+[data-evora-camara='entrada'] {
+  transform-origin: 50% 40%;
+  animation: evora-camara-entrada 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+[data-evora-camara='apertura'] {
+  transform-origin: 50% 40%;
+  animation: evora-camara-apertura 1.1s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+@keyframes evora-camara-entrada {
+  from { opacity: 0.35; transform: scale(1.07); filter: blur(10px); }
+}
+
+@keyframes evora-camara-apertura {
+  from { transform: scale(1.025); filter: blur(5px); }
+}
+
+/* ---------- 3. Visor holográfico ---------- */
+
+.evora-mira {
+  position: fixed;
+  z-index: 10002;
+  box-sizing: border-box;
+  border-radius: 14px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.evora-mira--oculta { visibility: hidden; }
+
+.evora-mira--bloqueando {
+  opacity: 1;
+  animation: evora-mira-bloqueo 0.95s cubic-bezier(0.2, 1.2, 0.3, 1) 0.3s backwards;
+}
+
+@keyframes evora-mira-bloqueo {
+  from { opacity: 0; transform: scale(3.4) rotate(-14deg); }
+  55%  { opacity: 1; }
+  to   { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+.evora-mira i {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 3px solid var(--evora-cian);
+  filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.9));
+}
+.evora-mira i:nth-child(1) { top: -2px;    left: -2px;  border-right: 0; border-bottom: 0; border-top-left-radius: 9px; }
+.evora-mira i:nth-child(2) { top: -2px;    right: -2px; border-left: 0;  border-bottom: 0; border-top-right-radius: 9px; }
+.evora-mira i:nth-child(3) { bottom: -2px; left: -2px;  border-right: 0; border-top: 0;    border-bottom-left-radius: 9px; }
+.evora-mira i:nth-child(4) { bottom: -2px; right: -2px; border-left: 0;  border-top: 0;    border-bottom-right-radius: 9px; }
+
+/* Destello al completar el enfoque */
+.evora-mira--enfocado::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 16px;
+  animation: evora-mira-flash 0.8s ease-out forwards;
+}
+
+@keyframes evora-mira-flash {
+  from { background: rgba(255, 255, 255, 0.45); box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.9), 0 0 30px 6px rgba(165, 243, 252, 0.9); }
+  to   { background: rgba(255, 255, 255, 0);    box-shadow: 0 0 0 18px rgba(34, 211, 238, 0), 0 0 0 0 rgba(165, 243, 252, 0); }
+}
+
+/* Línea de escaneo */
+.evora-mira-linea {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  top: 4%;
+  height: 2px;
+  border-radius: 2px;
+  opacity: 0;
+  background: linear-gradient(90deg, transparent, var(--evora-hielo), transparent);
+  box-shadow: 0 0 12px 2px rgba(34, 211, 238, 0.8);
+}
+
+.evora-mira--enfocado .evora-mira-linea {
+  animation: evora-mira-linea 3.6s ease-in-out 0.2s infinite;
+}
+
+@keyframes evora-mira-linea {
+  0%   { top: 4%;  opacity: 0; }
+  6%   { opacity: 1; }
+  30%  { top: 94%; opacity: 1; }
+  36%  { top: 94%; opacity: 0; }
+  100% { top: 94%; opacity: 0; }
+}
+
+/* Ondas de energía */
+.evora-mira-onda {
+  position: absolute;
+  inset: -4px;
+  border: 2px solid rgba(34, 211, 238, 0.7);
+  border-radius: 18px;
+  opacity: 0;
+}
+
+.evora-mira--enfocado .evora-mira-onda { animation: evora-mira-onda 2.4s ease-out infinite; }
+.evora-mira--enfocado .evora-mira-onda--2 { animation-delay: 1.2s; }
+
+@keyframes evora-mira-onda {
+  from { transform: scale(1);   opacity: 0.85; }
+  to   { transform: scale(1.8); opacity: 0; }
+}
+
+/* ---------- 4. Tarjeta ---------- */
+
+/* El wrapper lo posiciona Driver.js: aquí NO hay transform ni animación de posición. */
+.driver-popover.evora-tour-premium {
+  width: min(380px, calc(100vw - 24px));
+  min-width: 0;
+  max-width: none;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--evora-tinta);
+  font-family: inherit;
+  animation: none;
+}
+
+.driver-fade .driver-popover.evora-tour-premium { animation: none; }
+.driver-popover.evora-tour-premium.evora-oculto { opacity: 0 !important; }
+
+.evora-tour-premium .driver-popover-arrow-side-left.driver-popover-arrow   { border-left-color: #fff; }
+.evora-tour-premium .driver-popover-arrow-side-right.driver-popover-arrow  { border-right-color: #fff; }
+.evora-tour-premium .driver-popover-arrow-side-top.driver-popover-arrow    { border-top-color: #fff; }
+.evora-tour-premium .driver-popover-arrow-side-bottom.driver-popover-arrow { border-bottom-color: #fff; }
+
+.evora-escena { perspective: 1100px; }
+
+.evora-carta {
+  position: relative;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 22px 22px 18px;
+  border: 1.5px solid transparent;
+  border-radius: 22px;
+  /* Borde holográfico que gira lentamente */
+  background:
+    linear-gradient(#fff, #fff) padding-box,
+    conic-gradient(from var(--evora-ang), #22d3ee, #5eead4, #087f98, #a5f3fc, #22d3ee) border-box;
+  box-shadow:
+    var(--evora-sx, 0px) 28px 70px -14px rgba(6, 95, 115, 0.55),
+    0 0 0 1px rgba(34, 211, 238, 0.12),
+    0 0 40px -6px rgba(34, 211, 238, 0.35);
+  transform: rotateX(var(--evora-rx, 0deg)) rotateY(var(--evora-ry, 0deg));
+  transition: transform 0.25s ease-out, box-shadow 0.3s ease-out;
+  animation: evora-giro-borde 7s linear infinite;
+}
+
+@keyframes evora-giro-borde { to { --evora-ang: 360deg; } }
+
+.evora-barra {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: rgba(8, 127, 152, 0.12);
+}
+
+.evora-barra i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: left center;
+  transform: scaleX(var(--p, 0));
+  background: linear-gradient(90deg, #087f98, #22d3ee, #5eead4);
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.8);
+  transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.evora-brillo {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: radial-gradient(120% 80% at 0% 0%, rgba(34, 211, 238, 0.14), transparent 55%);
+}
+
+.evora-brillo::after {
+  content: '';
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: -60%;
+  width: 45%;
+  background: linear-gradient(100deg, transparent, rgba(165, 243, 252, 0.5), transparent);
+  transform: skewX(-18deg);
+}
+
+.evora-carta > :not(.evora-barra):not(.evora-brillo) { position: relative; }
+
+/* Cabecera: contador + segmentos */
+.evora-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 2px 34px 16px 0;
+}
+
+.evora-contador {
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.evora-contador b { font-size: 16px; font-weight: 750; color: var(--evora-profundo); }
+
+.evora-segmentos { display: flex; gap: 5px; }
+
+.evora-segmentos i {
+  position: relative;
+  width: 26px;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #e2e8f0;
+  transition: box-shadow 0.4s ease;
+}
+
+.evora-segmentos i::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: scaleX(0);
+  transform-origin: left center;
+  background: var(--evora-profundo);
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.evora-segmentos i.hecho::after { transform: scaleX(1); }
+
+.evora-segmentos i.activo { box-shadow: 0 0 10px rgba(34, 211, 238, 0.7); }
+.evora-segmentos i.activo::after {
+  transform: scaleX(1);
+  background: linear-gradient(90deg, #22d3ee, #5eead4, #22d3ee);
+  background-size: 200% 100%;
+  animation: evora-fluir 1.6s linear infinite;
+}
+
+@keyframes evora-fluir { to { background-position: -200% 0; } }
+
+.evora-icono {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 14px;
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  border-radius: 15px;
+  color: var(--evora-profundo);
+  background: linear-gradient(135deg, #ecfeff, #cffafe);
+  box-shadow: 0 8px 18px -8px rgba(8, 127, 152, 0.6), inset 0 1px 0 #fff;
+}
+
+.evora-tour-premium .driver-popover-title {
+  margin: 0 0 8px;
+  color: var(--evora-tinta);
+  font-size: 21px;
+  font-weight: 750;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.evora-tour-premium .driver-popover-description {
+  margin: 0;
+  color: var(--evora-texto);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.evora-consejo {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--evora-turquesa);
+  border-radius: 0 10px 10px 0;
+  background: linear-gradient(90deg, #ecfeff, #f8feff);
+  color: #0f3d48;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.evora-tour-premium .driver-popover-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid #eef2f6;
+}
+
+.evora-tour-premium .driver-popover-navigation-btns { display: flex; gap: 8px; margin-left: auto; }
+
+.evora-omitir {
+  padding: 6px 2px;
+  border: 0;
+  background: none;
+  color: #64748b;
+  font-family: inherit;
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.evora-omitir:hover { color: var(--evora-tinta); }
+
+/* Botones */
+.evora-tour-premium .driver-popover-prev-btn,
+.evora-tour-premium .driver-popover-next-btn {
+  position: relative;
+  overflow: hidden;
+  min-height: 40px;
+  padding: 10px 16px;
+  border-radius: 11px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  text-shadow: none;
+  cursor: pointer;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.18s ease, box-shadow 0.25s ease, opacity 0.2s ease;
+}
+
+.evora-tour-premium .driver-popover-prev-btn {
+  border: 1px solid #d5e0ea;
+  background: #fff;
+  color: #334155;
+}
+.evora-tour-premium .driver-popover-prev-btn:hover { background: #f1f7fa; transform: translateY(-1px); }
+.evora-tour-premium .driver-popover-prev-btn.driver-popover-btn-disabled { opacity: 0.4; pointer-events: none; }
+
+.evora-tour-premium .driver-popover-next-btn {
+  border: 1px solid #087f98;
+  background: linear-gradient(135deg, #087f98, #0aa5c0);
+  color: #fff;
+  box-shadow: 0 8px 18px -8px rgba(8, 127, 152, 0.9);
+}
+.evora-tour-premium .driver-popover-next-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.35), transparent 70%);
+  transform: translateX(-120%);
+}
+.evora-tour-premium .driver-popover-next-btn:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 12px 24px -8px rgba(8, 127, 152, 0.95), 0 0 0 4px rgba(34, 211, 238, 0.25);
+}
+.evora-tour-premium .driver-popover-next-btn:hover::before {
+  transform: translateX(120%);
+  transition: transform 0.7s ease;
+}
+.evora-tour-premium .driver-popover-prev-btn:active,
+.evora-tour-premium .driver-popover-next-btn:active { transform: scale(0.95); }
+
+.evora-ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  pointer-events: none;
+  transform: scale(0);
+  animation: evora-ripple 0.6s ease-out forwards;
+}
+.evora-tour-premium .driver-popover-prev-btn .evora-ripple { background: rgba(8, 127, 152, 0.25); }
+
+@keyframes evora-ripple { to { transform: scale(1); opacity: 0; } }
+
+.evora-tour-premium .driver-popover-close-btn {
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  color: #64748b;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.2s ease;
+}
+.evora-tour-premium .driver-popover-close-btn:hover { background: #ecf5f8; color: var(--evora-tinta); transform: rotate(90deg); }
+
+/* Foco accesible */
+.evora-tour-premium button:focus-visible {
+  outline: 3px solid rgba(34, 211, 238, 0.75);
+  outline-offset: 2px;
+}
+
+/* Durante una transición no se aceptan clics */
+body.evora-tour-ocupado .evora-tour-premium button { pointer-events: none; }
+
+/* ---------- 5. Entradas y salidas 3D ---------- */
+
+.evora-entra .evora-escena {
+  animation: evora-escena-adelante 0.85s cubic-bezier(0.2, 1.15, 0.3, 1) var(--evora-retardo, 0.35s) backwards;
+}
+.evora-entra[data-direccion='atras'] .evora-escena { animation-name: evora-escena-atras; }
+.evora-entra[data-direccion='inicio'] .evora-escena {
+  animation-name: evora-escena-inicio;
+  animation-duration: 1.1s;
+  animation-delay: 0.6s;
+  animation-timing-function: cubic-bezier(0.34, 1.5, 0.64, 1);
+}
+
+@keyframes evora-escena-adelante {
+  from { opacity: 0; transform: perspective(900px) rotateX(-26deg) rotateY(14deg) scale(0.78) translateY(34px); filter: blur(8px); }
+}
+@keyframes evora-escena-atras {
+  from { opacity: 0; transform: perspective(900px) rotateX(24deg) rotateY(-14deg) scale(1.2) translateY(-34px); filter: blur(8px); }
+}
+@keyframes evora-escena-inicio {
+  from { opacity: 0; transform: perspective(900px) rotateZ(-8deg) scale(0.25) translateY(50px); filter: blur(12px); }
+}
+
+/* Salida: depende de si se avanza o se retrocede */
+.evora-sale .evora-escena { animation: evora-sale-adelante 0.32s cubic-bezier(0.5, 0, 0.75, 0) forwards; }
+.evora-sale[data-salida='atras'] .evora-escena { animation-name: evora-sale-atras; }
+
+@keyframes evora-sale-adelante {
+  to { opacity: 0; transform: perspective(900px) rotateY(-22deg) translateX(-36px) scale(0.86); filter: blur(6px); }
+}
+@keyframes evora-sale-atras {
+  to { opacity: 0; transform: perspective(900px) rotateY(22deg) translateX(36px) scale(0.86); filter: blur(6px); }
+}
+
+/* Contenido en cascada, brillo y flecha */
+.evora-entra .evora-icono      { animation: evora-icono 0.85s cubic-bezier(0.34, 1.56, 0.64, 1) 0.55s backwards; }
+.evora-entra .evora-cabecera   { animation: evora-texto 0.6s ease 0.5s backwards; }
+.evora-entra .driver-popover-title       { animation: evora-texto 0.6s ease 0.65s backwards; }
+.evora-entra .driver-popover-description { animation: evora-texto 0.6s ease 0.76s backwards; }
+.evora-entra .evora-consejo    { animation: evora-texto 0.6s ease 0.88s backwards; }
+.evora-entra .driver-popover-footer { animation: evora-texto 0.6s ease 0.98s backwards; }
+.evora-entra .evora-brillo::after   { animation: evora-barrido 1.2s ease 0.95s backwards; left: 130%; }
+.evora-entra .driver-popover-arrow  { animation: evora-aparecer 0.4s ease 1s backwards; }
+
+@keyframes evora-icono   { from { opacity: 0; transform: scale(0) rotate(-220deg); } }
+@keyframes evora-texto   { from { opacity: 0; transform: translateY(14px); filter: blur(6px); } }
+@keyframes evora-barrido { from { left: -60%; } to { left: 130%; } }
+@keyframes evora-aparecer { from { opacity: 0; } }
+
+.driver-popover.evora-tour-premium:not(.evora-entra) .driver-popover-arrow { opacity: 0; }
+.driver-popover.evora-tour-premium.evora-sale .driver-popover-arrow { opacity: 0; transition: opacity 0.15s ease; }
+
+/* Latido suave del botón principal */
+.evora-entra .driver-popover-next-btn { animation: evora-latido 2s ease-out 1.8s infinite; }
+
+@keyframes evora-latido {
+  0%        { box-shadow: 0 8px 18px -8px rgba(8, 127, 152, 0.9), 0 0 0 0 rgba(34, 211, 238, 0.55); }
+  70%, 100% { box-shadow: 0 8px 18px -8px rgba(8, 127, 152, 0.9), 0 0 0 12px rgba(34, 211, 238, 0); }
+}
+
+/* ---------- 6. Cambio de página ----------
+   (ver [data-evora-camara] en la sección 2) */
+
+/* ---------- 7. Celebración final ---------- */
+
+.evora-confeti {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.evora-confeti-x {
+  position: absolute;
+  animation: evora-confeti-x var(--t) cubic-bezier(0.1, 0.7, 0.4, 1) forwards;
+}
+
+.evora-confeti-y {
+  display: block;
+  width: var(--w);
+  height: var(--h);
+  border-radius: var(--radio);
+  background: var(--color);
+  animation: evora-confeti-y var(--t) cubic-bezier(0.3, 0, 0.7, 1) forwards;
+}
+
+@keyframes evora-confeti-x { to { transform: translateX(var(--dx)); } }
+
+@keyframes evora-confeti-y {
+  0%   { transform: translateY(0) rotate(0) scale(0); opacity: 1; }
+  10%  { transform: translateY(0) rotate(40deg) scale(1); }
+  35%  { transform: translateY(var(--arriba)) rotate(300deg) scale(1); opacity: 1; }
+  100% { transform: translateY(var(--abajo)) rotate(var(--giro)) scale(0.8); opacity: 0; }
+}
+
+.evora-chispa {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+  background: var(--color);
+  box-shadow: 0 0 8px 2px var(--color);
+  animation: evora-chispa var(--t) cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+}
+
+@keyframes evora-chispa {
+  from { transform: translate(0, 0) scale(1); opacity: 1; }
+  to   { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; }
+}
+
+.evora-onda-final {
+  position: fixed;
+  z-index: 999999998;
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  border: 3px solid rgba(34, 211, 238, 0.9);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: evora-onda-final 1.2s cubic-bezier(0.1, 0.7, 0.3, 1) forwards;
+}
+.evora-onda-final--2 { animation-delay: 0.18s; border-color: rgba(94, 234, 212, 0.8); }
+
+@keyframes evora-onda-final {
+  from { transform: scale(0); opacity: 1; }
+  to   { transform: scale(24); opacity: 0; }
+}
+
+/* ---------- 8. Responsive ---------- */
+
+@media (max-width: 480px) {
+  .driver-popover.evora-tour-premium { width: calc(100vw - 20px); }
+  .evora-carta { padding: 18px 18px 14px; border-radius: 18px; }
+  .evora-tour-premium .driver-popover-title { font-size: 19px; }
+  .evora-segmentos i { width: 20px; }
+  .evora-tour-premium .driver-popover-footer { justify-content: space-between; }
+  .evora-tour-premium .driver-popover-prev-btn,
+  .evora-tour-premium .driver-popover-next-btn { min-height: 44px; }
+}
+
+@media (max-height: 560px) {
+  .evora-consejo { display: none; }
+  .evora-icono { display: none; }
+}
+
+/* ---------- 9. Movimiento reducido ----------
+   El atributo lo pone OnboardingTour.jsx según prefers-reduced-motion.
+   Alternativa suave: fundidos cortos, sin 3D, sin desenfoque ni confeti. */
+
+@keyframes evora-fundir { from { opacity: 0; } }
+@keyframes evora-destello-suave { from { opacity: 0.7; } to { opacity: 0; } }
+
+[data-evora-movimiento='reducido'] .driver-overlay { animation: evora-fundir 0.4s ease backwards; }
+
+[data-evora-movimiento='reducido'] .evora-carta {
+  animation: none;
+  transform: none;
+  transition: none;
+  background:
+    linear-gradient(#fff, #fff) padding-box,
+    linear-gradient(135deg, #22d3ee, #087f98) border-box;
+}
+
+[data-evora-movimiento='reducido'] .evora-entra .evora-escena { animation: evora-fundir 0.3s ease backwards; }
+[data-evora-movimiento='reducido'] .evora-sale .evora-escena  { animation: none; opacity: 0; }
+
+[data-evora-movimiento='reducido'] .evora-entra .evora-icono,
+[data-evora-movimiento='reducido'] .evora-entra .evora-cabecera,
+[data-evora-movimiento='reducido'] .evora-entra .driver-popover-title,
+[data-evora-movimiento='reducido'] .evora-entra .driver-popover-description,
+[data-evora-movimiento='reducido'] .evora-entra .evora-consejo,
+[data-evora-movimiento='reducido'] .evora-entra .driver-popover-footer,
+[data-evora-movimiento='reducido'] .evora-entra .evora-brillo::after,
+[data-evora-movimiento='reducido'] .evora-entra .driver-popover-arrow,
+[data-evora-movimiento='reducido'] .evora-entra .driver-popover-next-btn { animation: none; }
+
+[data-evora-movimiento='reducido'] .evora-mira--bloqueando { animation: evora-fundir 0.3s ease backwards; }
+[data-evora-movimiento='reducido'] .evora-mira--enfocado::before,
+[data-evora-movimiento='reducido'] .evora-mira--enfocado .evora-mira-linea,
+[data-evora-movimiento='reducido'] .evora-mira--enfocado .evora-mira-onda { animation: none; }
+[data-evora-movimiento='reducido'] .evora-mira { box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.55); }
+
+[data-evora-movimiento='reducido'] .evora-destello,
+[data-evora-movimiento='reducido'] .evora-destello--final { animation: evora-destello-suave 1s ease forwards; transform: scale(14); }
+
+[data-evora-movimiento='reducido'] .evora-segmentos i.activo::after { animation: none; }
+[data-evora-movimiento='reducido'] .evora-barra i,
+[data-evora-movimiento='reducido'] .evora-segmentos i::after { transition-duration: 0.2s; }
+[data-evora-movimiento='reducido'] .evora-tour-premium button,
+[data-evora-movimiento='reducido'] .evora-tour-premium button::before { transition: none; }
+[data-evora-movimiento='reducido'] .evora-ripple { display: none; }

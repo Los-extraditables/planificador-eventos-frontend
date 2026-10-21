@@ -324,6 +324,9 @@ const Progreso = () => {
   const listo = !cargando && !error;
   const cantidadEventos = eventosCalculados.length;
 
+  // El filtro solo se muestra cuando ya cargó y existe al menos un evento (sin importar el filtro activo)
+  const hayEventos = listo && eventos.length > 0;
+
   return (
     <div className={`${UI.pagina} min-w-0 max-w-full overflow-x-hidden`}>
       {/* Aviso visible (oculto al lector de pantalla para no duplicar) */}
@@ -342,7 +345,7 @@ const Progreso = () => {
 
       {/* El encabezado (h1) siempre está presente, también durante la carga y ante un error */}
       <EncabezadoPagina titulo="Progreso de eventos" subtitulo="Consulta el avance de tus eventos y subtareas.">
-        {listo && (
+        {hayEventos && (
           <div className="w-full sm:w-auto">
             <div className={`${UI.filtro} w-full sm:w-auto`}>
               <SlidersHorizontal className="w-4 h-4 text-slate-500 flex-shrink-0" aria-hidden="true" />
@@ -440,7 +443,9 @@ const Progreso = () => {
 
             {cantidadEventos === 0 ? (
               <div className={`${UI.tarjeta} p-6 sm:p-8 text-center text-slate-600 text-sm`}>
-                No hay eventos registrados que coincidan con este filtro.
+                {eventos.length === 0
+                  ? 'Aún no tienes eventos registrados.'
+                  : 'No hay eventos registrados que coincidan con este filtro.'}
               </div>
             ) : (
               <ul className="flex flex-col gap-3 sm:gap-4">

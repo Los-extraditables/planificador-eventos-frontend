@@ -9,6 +9,7 @@ import {
   Clock,
   Edit3,
   Plus,
+  RefreshCw,
   SlidersHorizontal,
   StickyNote,
   Trash2,
@@ -803,6 +804,8 @@ const DetalleEvento = () => {
     }
   };
 
+  const handleIrACrear = () => navigate('/crear');
+
   /* --------------------------- Estados de pantalla --------------------------- */
   if (cargando && !cargado) {
     return (
@@ -818,19 +821,91 @@ const DetalleEvento = () => {
     );
   }
 
-  if (!cargado || eventos.length === 0) {
+  // Error de conexión: franja compacta con borde izquierdo rojo
+  if (!cargado) {
     return (
       <div className={`${UI.pagina} min-w-0 max-w-full overflow-x-hidden`}>
         <button type="button" onClick={() => navigate('/hoy')} className={`inline-flex items-center gap-1.5 w-fit ${UI.btnEnlace} ${FOCO} ${TACTIL}`}>
           <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Volver a Hoy
         </button>
-        <div role="alert" className="p-4 sm:p-5 bg-red-50 text-red-700 border border-red-200 rounded-2xl text-sm flex items-start sm:items-center gap-3">
-          <AlertCircle className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
-          <span className="min-w-0 break-words">{error || 'No hay eventos disponibles para mostrar. Crea un evento nuevo.'}</span>
+
+        <EncabezadoPagina titulo="Detalle de eventos" />
+
+        <div
+          role="alert"
+          className="bg-white border border-slate-200 border-l-4 border-l-red-600 rounded-xl p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-6 min-w-0"
+        >
+          <div className="flex items-start gap-3 min-w-0">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" aria-hidden="true" />
+            <div className="min-w-0">
+              <h2 className="text-sm font-extrabold text-slate-900">No pudimos cargar tus eventos</h2>
+              <p className="text-sm text-slate-600 mt-0.5 break-words">
+                {error || 'Revisa tu conexión e inténtalo de nuevo.'}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => cargar()}
+            className={`${UI.btnSecundario} ${FOCO} w-full sm:w-auto justify-center flex-shrink-0 ${TACTIL}`}
+          >
+            <RefreshCw className="w-4 h-4 text-purple-700" aria-hidden="true" />
+            Reintentar
+          </button>
         </div>
-        <button type="button" onClick={() => cargar()} className={`${UI.btnPrimario} ${FOCO} w-full sm:w-auto justify-center ${TACTIL}`}>
-          Reintentar cargar
+      </div>
+    );
+  }
+
+  // Sin eventos (no es un error): vista previa "fantasma" + franja con la acción
+  if (eventos.length === 0) {
+    return (
+      <div className={`${UI.pagina} min-w-0 max-w-full overflow-x-hidden`}>
+        <button type="button" onClick={() => navigate('/hoy')} className={`inline-flex items-center gap-1.5 w-fit ${UI.btnEnlace} ${FOCO} ${TACTIL}`}>
+          <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Volver a Hoy
         </button>
+
+        <EncabezadoPagina titulo="Detalle de eventos" />
+
+        <section aria-labelledby="sin-eventos-titulo" className="space-y-4 min-w-0">
+          {/* Filas de ejemplo, solo decorativas */}
+          <div aria-hidden="true" className="space-y-3">
+            {[60, 25].map((avance) => (
+              <div
+                key={avance}
+                className="bg-white/60 border-2 border-dashed border-slate-200 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 opacity-70"
+              >
+                <div className="space-y-2.5 flex-1 min-w-0">
+                  <div className="h-3.5 w-40 max-w-full rounded-full bg-slate-200" />
+                  <div className="h-2.5 w-56 max-w-full rounded-full bg-slate-100" />
+                </div>
+                <div className="h-2 w-full md:w-52 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="h-full rounded-full bg-purple-200" style={{ width: `${avance}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-white border border-slate-200 border-l-4 border-l-[#7E22CE] rounded-xl p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-6 min-w-0">
+            <div className="min-w-0">
+              <h2 id="sin-eventos-titulo" className="text-sm font-extrabold text-slate-900">
+                Aquí aparecerán tus eventos
+              </h2>
+              <p className="text-sm text-slate-600 mt-0.5">
+                Crea el primero y podrás ver sus subtareas, fechas límite y progreso.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleIrACrear}
+              className={`${UI.btnPrimario} ${FOCO} w-full sm:w-auto justify-center flex-shrink-0 ${TACTIL}`}
+            >
+              <Plus className="w-4 h-4" aria-hidden="true" /> Crear un evento
+            </button>
+          </div>
+        </section>
       </div>
     );
   }
