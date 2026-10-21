@@ -10,7 +10,6 @@ import {
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
-// Campo de contraseña reutilizable
 const PasswordField = ({
   id,
   etiqueta,
@@ -20,44 +19,46 @@ const PasswordField = ({
   setVisible,
   disabled,
 }) => (
-  <div className="w-full min-w-0">
+  <div className="w-full">
     <label
       htmlFor={id}
-      className="block text-xs sm:text-sm font-semibold text-slate-700 mb-1.5"
+      className="block text-sm font-semibold text-slate-700 mb-2"
     >
       {etiqueta}
     </label>
 
-    <div className="relative w-full">
+    <div className="relative">
       <input
         id={id}
         type={visible ? 'text' : 'password'}
         required
+        minLength={8}
         autoComplete="new-password"
         disabled={disabled}
-        minLength={8}
         placeholder="Mínimo 8 caracteres"
         value={valor}
         onChange={(e) => setValor(e.target.value)}
-        className="w-full min-w-0 px-3.5 py-3 sm:py-3.5
-          border border-slate-300 rounded-xl text-sm
-          focus:outline-none focus:ring-2 focus:ring-purple-600
-          focus:border-transparent transition pr-12
-          bg-white text-slate-900 placeholder:text-slate-400
-          disabled:bg-slate-100 disabled:cursor-not-allowed"
+        className="w-full min-w-0 px-4 py-3.5 pr-12
+          border border-slate-300 rounded-2xl
+          text-base text-slate-900 bg-white
+          placeholder:text-slate-400
+          focus:outline-none focus:ring-2
+          focus:ring-purple-600 focus:border-transparent
+          transition disabled:bg-slate-100
+          disabled:cursor-not-allowed"
       />
 
       <button
         type="button"
         onClick={() => setVisible(!visible)}
         disabled={disabled}
-        className="absolute right-2 top-1/2 -translate-y-1/2
-          text-slate-400 hover:text-slate-600
-          p-2 rounded-lg cursor-pointer
-          focus:outline-none focus:ring-2 focus:ring-purple-600
-          disabled:cursor-not-allowed"
         title={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
         aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+        className="absolute right-3 top-1/2
+          -translate-y-1/2 p-2 rounded-lg
+          text-slate-400 hover:text-slate-600
+          focus:outline-none focus:ring-2
+          focus:ring-purple-500 disabled:opacity-50"
       >
         {visible ? (
           <EyeOff className="w-5 h-5" strokeWidth={2} />
@@ -81,7 +82,10 @@ const ResetPasswordPage = () => {
   const [mostrarNueva, setMostrarNueva] = useState(false);
   const [mostrarConfirmar, setMostrarConfirmar] = useState(false);
   const [cargando, setCargando] = useState(false);
-  const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
+  const [mensaje, setMensaje] = useState({
+    tipo: '',
+    texto: '',
+  });
 
   const rawApiUrl =
     import.meta.env.VITE_API_URL ||
@@ -91,62 +95,10 @@ const ResetPasswordPage = () => {
     ? rawApiUrl.slice(0, -1)
     : rawApiUrl;
 
-  if (!rawUid || !rawToken) {
-    return (
-      <div className="w-full max-w-md mx-auto min-w-0
-        text-left flex flex-col gap-5 sm:gap-6 px-1">
-        <div className="w-12 h-12 shrink-0 rounded-2xl
-          bg-red-50 text-red-500 flex items-center justify-center">
-          <AlertCircle className="w-6 h-6" />
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <h2 className="text-xl sm:text-2xl font-bold
-            text-slate-900 tracking-tight">
-            Enlace incompleto o inválido
-          </h2>
-
-          <p className="text-sm text-slate-500 leading-relaxed">
-            El enlace no contiene los datos necesarios para restablecer
-            tu contraseña. Solicita uno nuevo desde la pantalla de recuperación.
-          </p>
-        </div>
-
-        <Link
-          to="/forgot-password"
-          className="w-full min-h-12 px-4 bg-[#7C3AED]
-            hover:bg-[#6D28D9] text-white font-semibold
-            py-3 rounded-xl text-sm transition
-            shadow-lg shadow-purple-900/15 flex items-center
-            justify-center text-center"
-        >
-          Solicitar un enlace nuevo
-        </Link>
-
-        <div className="text-sm text-center text-slate-500">
-          <Link
-            to="/login"
-            className="text-purple-600 font-bold hover:underline
-              inline-flex items-center justify-center gap-1"
-          >
-            <ArrowLeft className="w-4 h-4 shrink-0" />
-            Volver a iniciar sesión
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (nuevaPassword !== confirmarPassword) {
-      setMensaje({
-        tipo: 'error',
-        texto: 'Las contraseñas no coinciden.',
-      });
-      return;
-    }
+    setMensaje({ tipo: '', texto: '' });
 
     if (nuevaPassword.length < 8) {
       setMensaje({
@@ -156,9 +108,16 @@ const ResetPasswordPage = () => {
       return;
     }
 
+    if (nuevaPassword !== confirmarPassword) {
+      setMensaje({
+        tipo: 'error',
+        texto: 'Las contraseñas no coinciden.',
+      });
+      return;
+    }
+
     try {
       setCargando(true);
-      setMensaje({ tipo: '', texto: '' });
 
       const cleanUid = decodeURIComponent(rawUid).trim();
       const cleanToken = decodeURIComponent(rawToken).trim();
@@ -188,8 +147,9 @@ const ResetPasswordPage = () => {
           errorData.token?.[0] ||
           errorData.uid?.[0] ||
           errorData.new_password?.[0] ||
+          errorData.re_new_password?.[0] ||
           errorData.non_field_errors?.[0] ||
-          'Error al restablecer la contraseña. El enlace puede haber caducado.';
+          'No se pudo restablecer la contraseña. El enlace puede haber caducado.';
 
         throw new Error(errorMsg);
       }
@@ -212,123 +172,203 @@ const ResetPasswordPage = () => {
     }
   };
 
+  const enlaceInvalido = !rawUid || !rawToken;
+
   return (
-    <div className="w-full max-w-md mx-auto min-w-0
-      text-left flex flex-col gap-5 sm:gap-6 px-1">
+    <main className="min-h-screen w-full min-w-0
+      bg-slate-50 flex flex-col items-center justify-center
+      px-4 py-8 sm:px-6 sm:py-10">
 
-      <div className="flex flex-col gap-2">
-        <h2 className="text-xl sm:text-2xl font-bold
-          text-slate-900 tracking-tight">
-          Restablecer contraseña
-        </h2>
+      {/* Tarjeta principal */}
+      <section className="w-full max-w-xl min-w-0
+        bg-white rounded-[28px] sm:rounded-[32px]
+        border border-slate-200/80
+        shadow-[0_18px_45px_-20px_rgba(15,23,42,0.22)]
+        px-5 py-8
+        sm:px-10 sm:py-10
+        md:px-12 md:py-12">
 
-        <p className="text-sm text-slate-500 leading-relaxed">
-          Ingresa tu nueva contraseña para actualizar la cuenta.
-        </p>
-      </div>
-
-      {mensaje.texto && (
-        <div
-          role={mensaje.tipo === 'exito' ? 'status' : 'alert'}
-          aria-live={mensaje.tipo === 'exito' ? 'polite' : 'assertive'}
-          className={`w-full min-w-0 text-sm p-3 sm:p-3.5
-            rounded-xl border flex items-start justify-between gap-2
-            break-words ${
-              mensaje.tipo === 'exito'
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                : 'bg-red-50 text-red-600 border-red-100'
-            }`}
-        >
-          <div className="flex items-start gap-2 min-w-0">
-            {mensaje.tipo === 'exito' ? (
-              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5
-                text-emerald-600" />
-            ) : (
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5
-                text-red-500" />
-            )}
-
-            <span className="min-w-0 break-words">
-              {mensaje.texto}
-            </span>
+        {/* Logo y marca */}
+        <div className="flex items-center gap-4 mb-8 sm:mb-10">
+          <div
+            className="w-12 h-12 sm:w-14 sm:h-14
+              shrink-0 rounded-2xl
+              bg-gradient-to-br from-[#253C75] via-[#176A87]
+              to-[#10BFA5] flex items-center justify-center
+              shadow-sm"
+            aria-label="Logo de Evora"
+          >
+            <svg
+              viewBox="0 0 40 40"
+              className="w-8 h-8 sm:w-9 sm:h-9"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M11 10H29M11 20H29M11 30H29"
+                stroke="white"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+              />
+              <path
+                d="M11 10L19 10L25 6M11 20H23L29 16M11 30H19L25 34"
+                stroke="white"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <circle cx="11" cy="10" r="3" fill="white" />
+              <circle cx="11" cy="20" r="3" fill="white" />
+              <circle cx="11" cy="30" r="3" fill="white" />
+            </svg>
           </div>
 
-          {mensaje.tipo === 'error' && (
-            <button
-              type="button"
-              onClick={() => setMensaje({ tipo: '', texto: '' })}
-              aria-label="Cerrar aviso"
-              className="shrink-0 text-red-400 hover:text-red-600
-                font-bold p-1 cursor-pointer"
-            >
-              ✕
-            </button>
-          )}
+          <span className="text-2xl sm:text-3xl
+            font-extrabold tracking-tight text-slate-900">
+            Evora
+          </span>
         </div>
-      )}
 
-      <form
-        onSubmit={handleSubmit}
-        className="w-full min-w-0 flex flex-col gap-4"
-      >
-        <PasswordField
-          id="nueva-password"
-          etiqueta="Nueva contraseña"
-          valor={nuevaPassword}
-          setValor={setNuevaPassword}
-          visible={mostrarNueva}
-          setVisible={setMostrarNueva}
-          disabled={cargando}
-        />
+        {/* Encabezado */}
+        <div className="flex flex-col gap-3 mb-8">
+          <h1 className="text-2xl sm:text-3xl
+            font-bold tracking-tight text-slate-950
+            leading-tight">
+            {enlaceInvalido
+              ? 'Enlace inválido'
+              : 'Restablecer contraseña'}
+          </h1>
 
-        <PasswordField
-          id="confirmar-password"
-          etiqueta="Confirmar contraseña"
-          valor={confirmarPassword}
-          setValor={setConfirmarPassword}
-          visible={mostrarConfirmar}
-          setVisible={setMostrarConfirmar}
-          disabled={cargando}
-        />
+          <p className="text-base sm:text-lg
+            text-slate-500 leading-7">
+            {enlaceInvalido
+              ? 'El enlace no contiene los datos necesarios. Solicita uno nuevo para restablecer tu contraseña.'
+              : 'Ingresa tu nueva contraseña para actualizar la cuenta.'}
+          </p>
+        </div>
 
-        <button
-          type="submit"
-          disabled={cargando}
-          aria-busy={cargando}
-          className="w-full min-h-12 px-4 bg-[#7C3AED]
-            hover:bg-[#6D28D9] text-white font-semibold
-            py-3 rounded-xl text-sm transition
-            shadow-lg shadow-purple-900/15 mt-2
-            cursor-pointer disabled:opacity-50
-            disabled:cursor-not-allowed flex items-center
-            justify-center gap-2 focus:outline-none
-            focus:ring-2 focus:ring-purple-600
-            focus:ring-offset-2"
-        >
-          {cargando ? (
-            <>
-              <div className="w-4 h-4 shrink-0 border-2
-                border-white border-t-transparent rounded-full
-                animate-spin" />
-              <span>Procesando...</span>
-            </>
-          ) : (
-            'Cambiar contraseña'
-          )}
-        </button>
-      </form>
+        {/* Mensajes de estado */}
+        {mensaje.texto && (
+          <div
+            role={mensaje.tipo === 'exito' ? 'status' : 'alert'}
+            aria-live={mensaje.tipo === 'exito' ? 'polite' : 'assertive'}
+            className={`mb-6 w-full min-w-0 p-4 rounded-2xl
+              border flex items-start gap-3 text-sm
+              ${
+                mensaje.tipo === 'exito'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-red-50 text-red-600 border-red-200'
+              }`}
+          >
+            {mensaje.tipo === 'exito' ? (
+              <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
+            ) : (
+              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            )}
 
-      <div className="text-sm text-center text-slate-500">
-        <Link
-          to="/login"
-          className="text-purple-600 font-bold hover:underline
-            inline-flex items-center justify-center gap-1"
-        >
-          <ArrowLeft className="w-4 h-4 shrink-0" />
-          Volver a iniciar sesión
-        </Link>
-      </div>
-    </div>
+            <span className="flex-1 min-w-0 break-words">
+              {mensaje.texto}
+            </span>
+
+            {mensaje.tipo === 'error' && (
+              <button
+                type="button"
+                onClick={() => setMensaje({ tipo: '', texto: '' })}
+                aria-label="Cerrar aviso"
+                className="font-bold shrink-0"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
+
+        {enlaceInvalido ? (
+          <div className="flex flex-col gap-5">
+            <Link
+              to="/forgot-password"
+              className="w-full min-h-12 px-4 py-3
+                bg-[#7C3AED] hover:bg-[#6D28D9]
+                text-white font-semibold rounded-2xl
+                flex items-center justify-center
+                text-center transition"
+            >
+              Solicitar un enlace nuevo
+            </Link>
+          </div>
+        ) : (
+          <form
+            onSubmit={handleSubmit}
+            className="w-full min-w-0 flex flex-col gap-6"
+          >
+            <PasswordField
+              id="nueva-password"
+              etiqueta="Nueva contraseña"
+              valor={nuevaPassword}
+              setValor={setNuevaPassword}
+              visible={mostrarNueva}
+              setVisible={setMostrarNueva}
+              disabled={cargando}
+            />
+
+            <PasswordField
+              id="confirmar-password"
+              etiqueta="Confirmar contraseña"
+              valor={confirmarPassword}
+              setValor={setConfirmarPassword}
+              visible={mostrarConfirmar}
+              setVisible={setMostrarConfirmar}
+              disabled={cargando}
+            />
+
+            <button
+              type="submit"
+              disabled={cargando}
+              aria-busy={cargando}
+              className="w-full min-h-14 px-4 py-3.5 mt-1
+                bg-[#7C3AED] hover:bg-[#6D28D9]
+                text-white font-bold text-base
+                rounded-2xl transition
+                shadow-[0_10px_20px_-10px_rgba(124,58,237,0.65)]
+                flex items-center justify-center gap-2
+                disabled:opacity-60 disabled:cursor-not-allowed
+                focus:outline-none focus:ring-2
+                focus:ring-purple-600 focus:ring-offset-2"
+            >
+              {cargando ? (
+                <>
+                  <span className="w-5 h-5 border-2 border-white
+                    border-t-transparent rounded-full animate-spin" />
+                  Procesando...
+                </>
+              ) : (
+                'Cambiar contraseña'
+              )}
+            </button>
+          </form>
+        )}
+
+        {/* Volver al inicio de sesión */}
+        <div className="mt-7 sm:mt-8 text-center">
+          <Link
+            to="/login"
+            className="inline-flex items-center justify-center
+              gap-2 text-sm sm:text-base
+              font-bold text-purple-600 hover:text-purple-800
+              hover:underline"
+          >
+            <ArrowLeft className="w-5 h-5 shrink-0" />
+            Volver a iniciar sesión
+          </Link>
+        </div>
+      </section>
+
+      {/* Pie de página */}
+      <footer className="mt-6 sm:mt-8 text-center
+        text-sm sm:text-base text-slate-600">
+        Evora · 2026
+      </footer>
+    </main>
   );
 };
 
