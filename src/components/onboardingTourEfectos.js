@@ -19,11 +19,17 @@ export function crearEfectos({ respetarMovimientoReducido = true } = {}) {
   let resolver = null;
   let ultimaMedida = '';
   let destruido = false;
+  let forzado = false; // el usuario pidió "Reducir animaciones"
 
   const temporizadores = new Set();
   const nodos = new Set();
 
-  const reducido = () => respetarMovimientoReducido && prefiereMovimientoReducido();
+  const reducido = () =>
+    forzado || (respetarMovimientoReducido && prefiereMovimientoReducido());
+
+  const forzarReducido = (valor) => {
+    forzado = Boolean(valor);
+  };
 
   const programar = (fn, ms) => {
     const id = window.setTimeout(() => {
@@ -233,5 +239,14 @@ export function crearEfectos({ respetarMovimientoReducido = true } = {}) {
     resolver = null;
   };
 
-  return { apuntar, ocultarMira, destello, destelloEn, celebrar, limpiar, reducido };
+  return {
+    apuntar,
+    ocultarMira,
+    destello,
+    destelloEn,
+    celebrar,
+    limpiar,
+    reducido,
+    forzarReducido
+  };
 }

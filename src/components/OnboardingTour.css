@@ -672,3 +672,32 @@ body.evora-tour-ocupado .evora-tour-premium button { pointer-events: none; }
 [data-evora-movimiento='reducido'] .evora-tour-premium button,
 [data-evora-movimiento='reducido'] .evora-tour-premium button::before { transition: none; }
 [data-evora-movimiento='reducido'] .evora-ripple { display: none; }
+/* Enlace "Reducir animaciones" */
+.evora-tour-premium .evora-reducir {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin: 12px 0 0;
+  padding: 8px 6px 2px;
+  border: 0;
+  border-top: 1px dashed #dbe7ee;
+  border-radius: 0;
+  background: none;
+  color: #64748b;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.evora-tour-premium .evora-reducir:hover {
+  color: var(--evora-profundo);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

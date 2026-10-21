@@ -12,8 +12,9 @@ import { crearEfectos } from './onboardingTourEfectos';
 const TOUR_EVENT = 'evora:reiniciar-tour';
 
 // true  = respeta "reducir movimiento" del sistema (versión suave, sin 3D ni confeti).
-// false = muestra siempre todas las animaciones (útil para probar en tu PC).
-const RESPETAR_MOVIMIENTO_REDUCIDO = true;
+// false = muestra siempre todas las animaciones (el usuario puede reducirlas
+//         con el enlace "Reducir animaciones" de la tarjeta).
+const RESPETAR_MOVIMIENTO_REDUCIDO = false;
 
 // Contenedor de página que hace el "movimiento de cámara" entre rutas.
 // Si el elemento resaltado está DENTRO de este contenedor, el efecto se omite
@@ -28,6 +29,9 @@ const MS_APERTURA = 1100;
 // Evita que el tour AUTOMÁTICO se repita dentro de la misma sesión
 // (por ejemplo, si el componente se vuelve a montar). No usa almacenamiento.
 let autoMostrado = false;
+
+// Preferencia del usuario "Reducir animaciones" (dura mientras la pestaña siga abierta).
+let reducirManual = false;
 
 const icono = (path) =>
   `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
@@ -224,7 +228,10 @@ const activarInclinacion = (escena, carta) => {
  * Así las animaciones no interfieren con las mediciones de posición de Driver.js.
  * Devuelve false si el popover ya estaba construido.
  */
-const construirTarjeta = (popover, { indice, previo, direccion, animar, alOmitir }) => {
+const construirTarjeta = (
+  popover,
+  { indice, previo, direccion, animar, alOmitir, reducidoManual, alAlternarMovimiento }
+) => {
   const wrapper = popover.wrapper;
   if (wrapper.querySelector(':scope > .evora-escena')) return false;
 
@@ -290,6 +297,18 @@ const construirTarjeta = (popover, { indice, previo, direccion, animar, alOmitir
 
   if (animar && window.matchMedia?.('(hover: hover)').matches) {
     activarInclinacion(escena, carta);
+  }
+
+  // Enlace para reducir / reactivar las animaciones.
+  if (alAlternarMovimiento) {
+    const reducir = crear('button', 'evora-reducir');
+    reducir.type = 'button';
+    reducir.textContent = reducidoManual ? 'Activar animaciones' : 'Reducir animaciones';
+    reducir.addEventListener('click', () => {
+      const ahora = alAlternarMovimiento();
+      reducir.textContent = ahora ? 'Activar animaciones' : 'Reducir animaciones';
+    });
+    carta.appendChild(reducir);
   }
 
   // La animación arranca un fotograma después de que Driver.js posicione la tarjeta.
@@ -639,7 +658,9 @@ export default function OnboardingTour({ cuentaNueva = false, onTerminar }) {
               previo: progresoPrevRef.current,
               direccion: direccionRef.current,
               animar: !fxRef.current?.reducido(),
-              alOmitir: () => accionesRef.current.cerrar('omitido')
+              alOmitir: () => accionesRef.current.cerrar('omitido'),
+              reducidoManual: reducirManual,
+              alAlternarMovimiento: () => accionesRef.current.alternarMovimiento()
             });
 
             if (construido) progresoPrevRef.current = indice;
@@ -696,7 +717,17 @@ export default function OnboardingTour({ cuentaNueva = false, onTerminar }) {
     [camara, descartar, esperarRuta, limpiarVisual, programar, restaurarMenu]
   );
 
-  accionesRef.current = { cerrar, irAPaso, iniciar };
+  /* ---- Reducir / reactivar animaciones (enlace de la tarjeta) ---- */
+  const alternarMovimiento = () => {
+    reducirManual = !reducirManual;
+    fxRef.current?.forzarReducido(reducirManual);
+    document.documentElement.dataset.evoraMovimiento = fxRef.current?.reducido()
+      ? 'reducido'
+      : 'completo';
+    return reducirManual;
+  };
+
+  accionesRef.current = { cerrar, irAPaso, iniciar, alternarMovimiento };
 
   /* ---- Ciclo de vida (compatible con React StrictMode) ---- */
   useEffect(() => {
@@ -704,6 +735,7 @@ export default function OnboardingTour({ cuentaNueva = false, onTerminar }) {
 
     const fx = crearEfectos({ respetarMovimientoReducido: RESPETAR_MOVIMIENTO_REDUCIDO });
     fxRef.current = fx;
+    fx.forzarReducido(reducirManual);
     document.documentElement.dataset.evoraMovimiento = fx.reducido() ? 'reducido' : 'completo';
 
     // Botón "Ver recorrido": se puede repetir siempre que se quiera.
@@ -734,7 +766,12 @@ export default function OnboardingTour({ cuentaNueva = false, onTerminar }) {
 
   /* ---- Arranque automático: SOLO cuentas recién creadas ---- */
   useEffect(() => {
-    if (cuentaNueva) accionesRef.current.iniciar();
+    if (cuentaNueva) {
+      accionesRef.current.iniciar();
+    } else {
+      // Sin cuenta nueva (sesión cerrada o tour ya visto): se rearma para la próxima.
+      autoMostrado = false;
+    }
   }, [cuentaNueva]);
 
   return null;
