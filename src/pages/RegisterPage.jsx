@@ -1,4 +1,3 @@
-
 import { AlertCircle, CheckCircle2, Eye, EyeOff, Lock, Mail, User } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -57,7 +56,9 @@ const traducirError = (err) => {
   const habla = (campo) => tiene(t, campo);
 
   // Sin conexión o servidor caído
+  // (los códigos 5xx se buscan como número completo para no confundirlos con otros textos)
   if (
+    /\b50[0-4]\b/.test(t) ||
     tiene(t, [
       'failed to fetch',
       'network',
@@ -65,11 +66,7 @@ const traducirError = (err) => {
       'load failed',
       'timeout',
       'error del servidor',
-      'server error',
-      '500',
-      '502',
-      '503',
-      '504'
+      'server error'
     ])
   ) {
     return {
@@ -187,13 +184,24 @@ const traducirError = (err) => {
     };
   }
 
+  // Error sin información útil: el backend puede haber creado la cuenta y haber fallado
+  // en un paso posterior (inicio de sesión automático, lectura de la respuesta, etc.).
+  // Por eso NO se afirma que la cuenta no se creó: se invita a iniciar sesión.
   return {
     campo: 'general',
-    texto: 'No pudimos crear tu cuenta. Revisa los datos e inténtalo de nuevo.'
+    titulo: 'Puede que tu cuenta ya esté creada.',
+    texto: 'Algo falló justo después de registrarte. Intenta iniciar sesión con tu correo y contraseña.',
+    enlaceLogin: true
   };
 };
 
 /* ============================ Mensaje bajo el campo ============================ */
+const EnlaceLogin = () => (
+  <Link to="/login" className="text-[#7E22CE] font-bold underline hover:text-[#6B21A8]">
+    Inicia sesión
+  </Link>
+);
+
 const MensajeCampo = ({ id, error }) =>
   error.texto ? (
     <p id={id} role="alert" className="flex items-start gap-1.5 text-xs text-red-700 leading-relaxed">
@@ -207,12 +215,7 @@ const MensajeCampo = ({ id, error }) =>
         {error.enlaceLogin && (
           <>
             {' '}
-            <Link
-              to="/login"
-              className="text-[#7E22CE] font-bold underline hover:text-[#6B21A8]"
-            >
-              Inicia sesión
-            </Link>
+            <EnlaceLogin />
           </>
         )}
       </span>
@@ -250,6 +253,8 @@ export const RegisterPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return; // evita envíos dobles que crearían la cuenta dos veces
+
     setError(SIN_ERROR);
     setMensajeExito('');
 
@@ -299,7 +304,8 @@ export const RegisterPage = () => {
         navigate('/hoy');
       }, 1500);
     } catch (err) {
-      console.error('Error de registro:', err);
+      // Se deja el error real en consola para poder ver qué paso falló
+      console.error('Error de registro:', err, err?.data ?? err?.response?.data);
 
       const { campo, texto, titulo, enlaceLogin } = traducirError(err);
 
@@ -334,10 +340,19 @@ export const RegisterPage = () => {
       {error.campo === 'general' && (
         <div
           role="alert"
-          className="bg-red-50 text-red-700 text-xs font-semibold p-4 rounded-2xl border border-red-200 flex items-center gap-2.5 shadow-sm"
+          className="bg-red-50 text-red-700 text-xs font-semibold p-4 rounded-2xl border border-red-200 flex items-start gap-2.5 shadow-sm"
         >
-          <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" aria-hidden="true" />
-          <span>{error.texto}</span>
+          <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" aria-hidden="true" />
+          <span>
+            {error.titulo && <strong className="font-extrabold">{error.titulo} </strong>}
+            {error.texto}
+            {error.enlaceLogin && (
+              <>
+                {' '}
+                <EnlaceLogin />
+              </>
+            )}
+          </span>
         </div>
       )}
 
