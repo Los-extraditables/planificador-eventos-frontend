@@ -183,6 +183,8 @@ const armarCambio = (accion, { fecha, nota } = {}) => {
 const mensajeFechaExcedida = (fechaEvento) =>
   `No es posible posponer: la nueva fecha supera la fecha del evento (${formatearFechaDisplay(fechaEvento)}).`;
 
+const MENSAJE_FECHA_PASADA = 'La nueva fecha debe ser posterior a hoy.';
+
 /* ===================== Etiqueta de pospuesta ===================== */
 const EtiquetaPospuestas = ({ cantidad, texto }) => {
   if (!cantidad && !texto) return null;
@@ -209,6 +211,16 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
   const minFecha = fechaOffsetStr(1);
   const maxFecha = limpiarFecha(eventoFecha) || undefined;
   const sinMargen = Boolean(maxFecha && maxFecha < minFecha);
+
+  // Validación en vivo: el campo se marca en rojo apenas la fecha queda fuera del rango permitido
+  const fechaAntes = Boolean(form.fecha) && form.fecha < minFecha;
+  const fechaDespues = Boolean(form.fecha) && Boolean(maxFecha) && form.fecha > maxFecha;
+  const textoFechaVivo = fechaDespues
+    ? mensajeFechaExcedida(maxFecha)
+    : fechaAntes
+      ? MENSAJE_FECHA_PASADA
+      : '';
+  const errorVisible = errorFecha || textoFechaVivo;
 
   const cerrar = () => {
     setAbierto(false);
@@ -284,7 +296,7 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
     }
 
     if (form.fecha < minFecha) {
-      return fallar('La nueva fecha debe ser posterior a hoy.');
+      return fallar(MENSAJE_FECHA_PASADA);
     }
 
     cerrar();
@@ -296,11 +308,11 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
   };
 
   const idsDescripcionFecha = [
-    errorFecha ? 'posponer-fecha-error' : null,
-    maxFecha && !errorFecha && !sinMargen
+    errorVisible ? 'posponer-fecha-error' : null,
+    maxFecha && !errorVisible && !sinMargen
       ? 'posponer-fecha-ayuda'
       : null,
-    sinMargen && !errorFecha
+    sinMargen && !errorVisible
       ? 'posponer-fecha-sin-margen'
       : null
   ]
@@ -429,28 +441,28 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
                         min={minFecha}
                         max={maxFecha}
                         aria-required="true"
-                        aria-invalid={errorFecha ? 'true' : 'false'}
+                        aria-invalid={errorVisible ? 'true' : 'false'}
                         aria-describedby={idsDescripcionFecha || undefined}
                         value={form.fecha}
                         onChange={(e) => {
                           setForm({ ...form, fecha: e.target.value });
                           setErrorFecha('');
                         }}
-                        className={`${errorFecha ? UI.inputError : UI.input} pl-11 w-full min-w-0 ${CAMPO_MOVIL} ${FECHA_IOS} ${FOCO}`}
+                        className={`${errorVisible ? UI.inputError : UI.input} pl-11 w-full min-w-0 ${CAMPO_MOVIL} ${FECHA_IOS} ${FOCO}`}
                       />
                     </div>
 
-                    {errorFecha && (
+                    {errorVisible && (
                       <p
                         id="posponer-fecha-error"
                         role="alert"
                         className={`${UI.error} break-words`}
                       >
-                        {errorFecha}
+                        {errorVisible}
                       </p>
                     )}
 
-                    {maxFecha && !errorFecha && !sinMargen && (
+                    {maxFecha && !errorVisible && !sinMargen && (
                       <p
                         id="posponer-fecha-ayuda"
                         className="text-xs text-slate-600 mt-1.5"
@@ -459,7 +471,7 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
                       </p>
                     )}
 
-                    {sinMargen && !errorFecha && (
+                    {sinMargen && !errorVisible && (
                       <p
                         id="posponer-fecha-sin-margen"
                         className="text-xs text-amber-800 mt-1.5 break-words"

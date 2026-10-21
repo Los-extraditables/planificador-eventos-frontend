@@ -20,6 +20,9 @@ const FECHA_IOS = 'appearance-none block min-w-0 max-w-full min-h-[3.25rem] sm:m
 
 const nuevaGestion = () => ({ id: Date.now() + Math.random(), descripcion: '', plazo: '', horas_estimadas: '' });
 
+// Evita errores de coma flotante al sumar horas (0.1 + 0.2, etc.)
+const redondear = (n) => Math.round(n * 100) / 100;
+
 const CrearEvento = ({ onEventoCreado }) => {
   const navigate = useNavigate();
   const API_URL = import.meta.env.VITE_API_URL || 'https://planificador-eventos-backend.onrender.com/api';
@@ -92,12 +95,48 @@ const CrearEvento = ({ onEventoCreado }) => {
   // --- LÓGICA DE HORAS GLOBALES Y AVISO ---
   const limiteGlobal = parseFloat(formEvento.limite_diario_horas) || 0;
 
-  const horasAsignadasTotal = gestiones.reduce((acc, g) => {
-    const h = parseFloat(g.horas_estimadas);
-    return acc + (!isNaN(h) && h > 0 ? h : 0);
-  }, 0);
+  const horasAsignadasTotal = redondear(
+    gestiones.reduce((acc, g) => {
+      const h = parseFloat(g.horas_estimadas);
+      return acc + (!isNaN(h) && h > 0 ? h : 0);
+    }, 0)
+  );
 
   const hayExcesoGlobal = limiteGlobal > 0 && horasAsignadasTotal > limiteGlobal;
+
+  // --- VALIDACIÓN DE CADA SUBTAREA (se recalcula en cada cambio) ---
+  // Reglas: plazo no anterior a hoy ni posterior a la fecha del evento;
+  // horas válidas y sin superar el límite del evento; nombre obligatorio si hay plazo u horas.
+  const erroresGestiones = {};
+  gestiones.forEach((g) => {
+    const e = {};
+    const tieneHoras = g.horas_estimadas !== '' && g.horas_estimadas !== null;
+
+    if ((g.plazo || tieneHoras) && !g.descripcion.trim()) {
+      e.descripcion = 'Escribe el nombre de la subtarea.';
+    }
+
+    if (g.plazo) {
+      if (g.plazo < hoyStr) {
+        e.plazo = 'El plazo no puede ser anterior a hoy.';
+      } else if (formEvento.fecha && g.plazo > formEvento.fecha) {
+        e.plazo = 'El plazo no puede ser posterior a la fecha límite del evento.';
+      }
+    }
+
+    if (tieneHoras) {
+      const h = parseFloat(g.horas_estimadas);
+      if (isNaN(h) || h < 0) {
+        e.horas = 'Ingresa un número de horas válido (0 o más).';
+      } else if (limiteGlobal > 0 && h > limiteGlobal) {
+        e.horas = `No puede superar el límite del evento (${limiteGlobal} h).`;
+      }
+    }
+
+    if (Object.keys(e).length > 0) erroresGestiones[g.id] = e;
+  });
+
+  const hayErroresGestiones = Object.keys(erroresGestiones).length > 0;
 
   // Devuelve los errores y el id del primer campo inválido (en orden visual)
   const validarFormulario = () => {
@@ -125,10 +164,23 @@ const CrearEvento = ({ onEventoCreado }) => {
     const primero = orden.find((c) => nuevosErrores[c]);
     const hayErrores = Boolean(primero);
 
+    // Primer campo inválido dentro de las subtareas
+    let idSubtarea = null;
+    for (const g of gestiones) {
+      const e = erroresGestiones[g.id];
+      if (!e) continue;
+      if (e.descripcion) idSubtarea = `subtarea-descripcion-${g.id}`;
+      else if (e.plazo) idSubtarea = `subtarea-plazo-${g.id}`;
+      else if (e.horas) idSubtarea = `subtarea-horas-${g.id}`;
+      break;
+    }
+
     return {
-      ok: !hayErrores && !hayExcesoGlobal,
-      // Si solo falla el exceso de horas, el foco va al campo del límite, que es el que puede corregirse
-      idPrimero: primero ? `campo-${primero}` : hayExcesoGlobal ? 'campo-limite_diario_horas' : null
+      ok: !hayErrores && !hayExcesoGlobal && !hayErroresGestiones,
+      // El foco va al primer error visible; si solo falla el total de horas, al campo del límite
+      idPrimero: primero
+        ? `campo-${primero}`
+        : idSubtarea || (hayExcesoGlobal ? 'campo-limite_diario_horas' : null)
     };
   };
 
@@ -232,10 +284,27 @@ const CrearEvento = ({ onEventoCreado }) => {
     };
   };
 
+  // Atributos de accesibilidad para un campo de subtarea con posible error
+  const propsSub = (gest, campo, nombreId) => {
+    const hayError = Boolean(erroresGestiones[gest.id]?.[campo]);
+    return {
+      id: `${nombreId}-${gest.id}`,
+      'aria-invalid': hayError ? 'true' : 'false',
+      'aria-describedby': hayError ? `error-${nombreId}-${gest.id}` : undefined
+    };
+  };
+
   const MensajeError = ({ campo }) =>
     errores[campo] ? (
       <p id={`error-${campo}`} role="alert" className={`${UI.error} break-words`}>
         {errores[campo]}
+      </p>
+    ) : null;
+
+  const ErrorSub = ({ gest, campo, nombreId }) =>
+    erroresGestiones[gest.id]?.[campo] ? (
+      <p id={`error-${nombreId}-${gest.id}`} className={`${UI.error} break-words`}>
+        {erroresGestiones[gest.id][campo]}
       </p>
     ) : null;
 
@@ -379,7 +448,10 @@ const CrearEvento = ({ onEventoCreado }) => {
         <section aria-labelledby="titulo-subtareas" className={`${UI.tarjeta} space-y-5 sm:space-y-6 min-w-0`}>
           <div>
             <h2 id="titulo-subtareas" className={UI.h2}>Subtareas iniciales</h2>
-            <p className={UI.subtitulo}>Define las subtareas necesarias para organizar el evento.</p>
+            <p className={UI.subtitulo}>
+              Define las subtareas necesarias para organizar el evento. Cada plazo debe estar entre hoy y la fecha
+              límite del evento.
+            </p>
           </div>
 
           {/* BANNER DE AVISO OPCIONAL */}
@@ -424,7 +496,7 @@ const CrearEvento = ({ onEventoCreado }) => {
 
                 {hayExcesoGlobal ? (
                   <span className="text-xs font-bold bg-red-100 text-red-700 px-2.5 py-1 rounded-lg shrink-0">
-                    Exceso de {(horasAsignadasTotal - limiteGlobal).toFixed(1)} h
+                    Exceso de {redondear(horasAsignadasTotal - limiteGlobal)} h
                   </span>
                 ) : (
                   <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-lg shrink-0">
@@ -453,7 +525,7 @@ const CrearEvento = ({ onEventoCreado }) => {
                 key={gest.id}
                 role="group"
                 aria-label={`Subtarea ${i + 1}`}
-                className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3 md:items-center
+                className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3 md:items-start
                   border border-slate-200 rounded-2xl p-3 sm:p-4 md:border-0 md:rounded-none md:p-0"
               >
                 {/* Nombre */}
@@ -462,14 +534,15 @@ const CrearEvento = ({ onEventoCreado }) => {
                     Nombre de la subtarea {i + 1}
                   </label>
                   <input
-                    id={`subtarea-descripcion-${gest.id}`}
                     type="text"
                     placeholder="Ej. Confirmar catering"
                     autoComplete="off"
-                    className={`${UI.input} ${CAMPO} ${FOCO}`}
+                    className={`${erroresGestiones[gest.id]?.descripcion ? UI.inputError : UI.input} ${CAMPO} ${FOCO}`}
                     value={gest.descripcion}
+                    {...propsSub(gest, 'descripcion', 'subtarea-descripcion')}
                     onChange={(e) => handleGestionChange(gest.id, 'descripcion', e.target.value)}
                   />
+                  <ErrorSub gest={gest} campo="descripcion" nombreId="subtarea-descripcion" />
                 </div>
 
                 {/* Plazo */}
@@ -478,14 +551,15 @@ const CrearEvento = ({ onEventoCreado }) => {
                     Plazo de la subtarea {i + 1}
                   </label>
                   <input
-                    id={`subtarea-plazo-${gest.id}`}
                     type="date"
                     min={hoyStr}
                     max={formEvento.fecha || undefined}
-                    className={`${UI.input} ${CAMPO} ${FECHA_IOS} ${FOCO}`}
+                    className={`${erroresGestiones[gest.id]?.plazo ? UI.inputError : UI.input} ${CAMPO} ${FECHA_IOS} ${FOCO}`}
                     value={gest.plazo}
+                    {...propsSub(gest, 'plazo', 'subtarea-plazo')}
                     onChange={(e) => handleGestionChange(gest.id, 'plazo', e.target.value)}
                   />
+                  <ErrorSub gest={gest} campo="plazo" nombreId="subtarea-plazo" />
                 </div>
 
                 {/* Horas estimadas */}
@@ -494,20 +568,22 @@ const CrearEvento = ({ onEventoCreado }) => {
                     Horas estimadas de la subtarea {i + 1}
                   </label>
                   <input
-                    id={`subtarea-horas-${gest.id}`}
                     type="number"
                     step="0.5"
                     min="0"
+                    max={limiteGlobal > 0 ? limiteGlobal : undefined}
                     inputMode="decimal"
                     placeholder="Ej. 2.5"
-                    className={`${UI.input} ${CAMPO} ${FOCO}`}
+                    className={`${erroresGestiones[gest.id]?.horas ? UI.inputError : UI.input} ${CAMPO} ${FOCO}`}
                     value={gest.horas_estimadas}
+                    {...propsSub(gest, 'horas', 'subtarea-horas')}
                     onChange={(e) => handleGestionChange(gest.id, 'horas_estimadas', e.target.value)}
                   />
+                  <ErrorSub gest={gest} campo="horas" nombreId="subtarea-horas" />
                 </div>
 
                 {/* Eliminar: en móvil lleva texto visible; en escritorio solo el icono */}
-                <div className="sm:col-span-2 md:col-span-1 flex justify-end md:justify-center">
+                <div className="sm:col-span-2 md:col-span-1 flex justify-end md:justify-center md:pt-1.5">
                   <button
                     type="button"
                     onClick={() => handleEliminarSubtarea(gest.id)}

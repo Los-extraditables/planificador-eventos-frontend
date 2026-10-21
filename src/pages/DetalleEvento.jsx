@@ -292,6 +292,16 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
   const limiteEvento = limpiarFecha(eventoFecha);
   const maxFecha = limiteEvento && limiteEvento >= minFecha ? limiteEvento : undefined;
 
+  // Validación en vivo: la casilla se marca en rojo apenas la fecha queda fuera del rango permitido
+  const fechaAntes = Boolean(form.fecha) && form.fecha < minFecha;
+  const fechaDespues = Boolean(form.fecha) && Boolean(maxFecha) && form.fecha > maxFecha;
+  const textoFechaVivo = fechaAntes
+    ? 'La nueva fecha debe ser posterior a hoy.'
+    : fechaDespues
+      ? 'La fecha no puede superar la fecha límite del evento.'
+      : '';
+  const errorVisible = errorFecha || textoFechaVivo;
+
   const cerrar = () => {
     setAbierto(false);
     setErrorFecha('');
@@ -320,7 +330,7 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
     await ejecutar('pospuesto', { fecha: form.fecha, nota: form.nota });
   };
 
-  const describedFecha = [errorFecha ? 'posponer-fecha-error' : null, maxFecha && !errorFecha ? 'posponer-fecha-ayuda' : null]
+  const describedFecha = [errorVisible ? 'posponer-fecha-error' : null, maxFecha && !errorVisible ? 'posponer-fecha-ayuda' : null]
     .filter(Boolean)
     .join(' ');
 
@@ -387,18 +397,18 @@ const RegistroAvance = ({ gestion, eventoFecha, onRegistrar }) => {
                   min={minFecha}
                   max={maxFecha}
                   aria-required="true"
-                  aria-invalid={errorFecha ? 'true' : 'false'}
+                  aria-invalid={errorVisible ? 'true' : 'false'}
                   aria-describedby={describedFecha || undefined}
                   value={form.fecha}
                   onChange={(e) => {
                     setForm({ ...form, fecha: e.target.value });
                     setErrorFecha('');
                   }}
-                  className={`${errorFecha ? UI.inputError : UI.input} ${CAMPO} ${FECHA_IOS} pl-11 ${FOCO}`}
+                  className={`${errorVisible ? UI.inputError : UI.input} ${CAMPO} ${FECHA_IOS} pl-11 ${FOCO}`}
                 />
               </div>
-              <MensajeCampo id="posponer-fecha-error" texto={errorFecha} />
-              {maxFecha && !errorFecha && (
+              <MensajeCampo id="posponer-fecha-error" texto={errorVisible} />
+              {maxFecha && !errorVisible && (
                 <p id="posponer-fecha-ayuda" className="text-xs text-slate-600 mt-1.5">Puedes elegir hasta la fecha límite del evento.</p>
               )}
             </div>
@@ -919,7 +929,27 @@ const DetalleEvento = () => {
   const limiteActual = parseFloat(eventoActivo?.limite_diario_horas) || 0;
   const horasOtras = sumarHoras(gestionesEv, modalGestion.modo === 'editar' ? modalGestion.gestionId : null);
   const horasNuevas = parseFloat(formGestion.horas_estimadas) || 0;
+  const fechaLimiteEv = limpiarFecha(eventoActivo?.fecha);
+
+  // --- Validaciones en vivo de la subtarea: la casilla se pone roja mientras se escribe ---
   const excedeSubtarea = limiteActual > 0 && horasOtras + horasNuevas > limiteActual;
+  const horasMayor24 = horasNuevas > 24;
+  const horasInvalidas = excedeSubtarea || horasMayor24;
+  const textoHorasVivo = horasMayor24 ? 'Las horas estimadas no pueden superar 24.' : '';
+
+  // Fecha de la subtarea: antes de hoy o después de la fecha del evento
+  const plazoAntes = Boolean(formGestion.plazo) && formGestion.plazo < hoyStr;
+  const plazoDespues = Boolean(formGestion.plazo) && Boolean(fechaLimiteEv) && formGestion.plazo > fechaLimiteEv;
+  const textoPlazoVivo = plazoAntes
+    ? 'El plazo no puede ser anterior a hoy.'
+    : plazoDespues
+      ? `El plazo no puede ser posterior a la fecha límite del evento (${formatearFechaDisplay(fechaLimiteEv)}).`
+      : '';
+  const plazoInvalido = Boolean(textoPlazoVivo);
+
+  // Fecha del evento (modal de editar evento): antes de hoy
+  const fechaEventoAntes = Boolean(formEvento.fecha) && limpiarFecha(formEvento.fecha) < hoyStr;
+  const fechaEventoInvalida = errEvento.campo === 'fecha' || fechaEventoAntes;
 
   const horasSubtareasTotal = sumarHoras(gestionesEv);
   const nuevoLimiteForm = parseFloat(formEvento.limite_diario_horas);
@@ -1206,15 +1236,26 @@ const DetalleEvento = () => {
                 <DateField
                   min={hoyStr}
                   aria-required="true"
-                  invalido={errEvento.campo === 'fecha'}
+                  invalido={fechaEventoInvalida}
                   value={formEvento.fecha}
                   {...attrsCampo(errEvento, 'fecha', 'evento-fecha')}
+                  aria-invalid={fechaEventoInvalida ? 'true' : undefined}
+                  aria-describedby={fechaEventoInvalida ? 'evento-fecha-error' : undefined}
                   onChange={(e) => {
                     setFormEvento({ ...formEvento, fecha: e.target.value });
                     setErrEvento(SIN_ERROR);
                   }}
                 />
-                <MensajeCampo id="evento-fecha-error" texto={errEvento.campo === 'fecha' ? errEvento.texto : ''} />
+                <MensajeCampo
+                  id="evento-fecha-error"
+                  texto={
+                    errEvento.campo === 'fecha'
+                      ? errEvento.texto
+                      : fechaEventoAntes
+                        ? 'La fecha no puede ser anterior a hoy. Elige hoy o una fecha futura.'
+                        : ''
+                  }
+                />
               </div>
             </div>
 
@@ -1305,16 +1346,21 @@ const DetalleEvento = () => {
                 <label htmlFor="gestion-plazo" className={UI.label}>Fecha</label>
                 <DateField
                   min={hoyStr}
-                  max={limpiarFecha(eventoActivo?.fecha) || undefined}
-                  invalido={errGestion.campo === 'plazo'}
+                  max={fechaLimiteEv || undefined}
+                  invalido={plazoInvalido || errGestion.campo === 'plazo'}
                   value={formGestion.plazo}
                   {...attrsCampo(errGestion, 'plazo', 'gestion-plazo')}
+                  aria-invalid={plazoInvalido || errGestion.campo === 'plazo' ? 'true' : undefined}
+                  aria-describedby={plazoInvalido || errGestion.campo === 'plazo' ? 'gestion-plazo-error' : undefined}
                   onChange={(e) => {
                     setFormGestion({ ...formGestion, plazo: e.target.value });
                     setErrGestion(SIN_ERROR);
                   }}
                 />
-                <MensajeCampo id="gestion-plazo-error" texto={errGestion.campo === 'plazo' ? errGestion.texto : ''} />
+                <MensajeCampo
+                  id="gestion-plazo-error"
+                  texto={errGestion.campo === 'plazo' ? errGestion.texto : textoPlazoVivo}
+                />
               </div>
 
               <div className="min-w-0">
@@ -1331,17 +1377,20 @@ const DetalleEvento = () => {
                     inputMode="decimal"
                     aria-required="true"
                     placeholder="Ej. 2.5"
-                    className={`${excedeSubtarea || errGestion.campo === 'horas' ? UI.inputError : UI.input} ${CAMPO} pl-11 ${FOCO}`}
+                    className={`${horasInvalidas || errGestion.campo === 'horas' ? UI.inputError : UI.input} ${CAMPO} pl-11 ${FOCO}`}
                     value={formGestion.horas_estimadas}
                     {...attrsCampo(errGestion, 'horas', 'gestion-horas', limiteActual > 0 ? 'gestion-horas-ayuda' : undefined)}
-                    aria-invalid={excedeSubtarea || errGestion.campo === 'horas' ? 'true' : undefined}
+                    aria-invalid={horasInvalidas || errGestion.campo === 'horas' ? 'true' : undefined}
                     onChange={(e) => {
                       setFormGestion({ ...formGestion, horas_estimadas: e.target.value });
                       setErrGestion(SIN_ERROR);
                     }}
                   />
                 </div>
-                <MensajeCampo id="gestion-horas-error" texto={errGestion.campo === 'horas' ? errGestion.texto : ''} />
+                <MensajeCampo
+                  id="gestion-horas-error"
+                  texto={errGestion.campo === 'horas' ? errGestion.texto : textoHorasVivo}
+                />
               </div>
             </div>
 
