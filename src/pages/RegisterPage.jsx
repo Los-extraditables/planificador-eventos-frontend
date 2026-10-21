@@ -55,16 +55,24 @@ const traducirError = (err) => {
   const t = recolectarTexto(err);
   const habla = (campo) => tiene(t, campo);
 
-  // Sin conexión o servidor caído
-  // (los códigos 5xx se buscan como número completo para no confundirlos con otros textos)
+  // Sin conexión: la petición nunca llegó al servidor, así que la cuenta NO se creó
+  if (tiene(t, ['failed to fetch', 'networkerror', 'network error', 'load failed', 'timeout'])) {
+    return {
+      campo: 'general',
+      titulo: '',
+      texto: 'No pudimos conectar con el servidor. Revisa tu conexión e inténtalo de nuevo en unos segundos.'
+    };
+  }
+
+  // El servidor respondió 5xx o devolvió HTML en vez de JSON: la cuenta pudo haberse creado.
+  // Se marca como "ambiguo" para verificarlo iniciando sesión (ver handleSubmit).
   if (
     /\b50[0-4]\b/.test(t) ||
     tiene(t, [
-      'failed to fetch',
-      'network',
-      'networkerror',
-      'load failed',
-      'timeout',
+      'unexpected token',
+      'not valid json',
+      '<!doctype',
+      'unexpected end of json',
       'error del servidor',
       'server error'
     ])
@@ -72,7 +80,9 @@ const traducirError = (err) => {
     return {
       campo: 'general',
       titulo: '',
-      texto: 'No pudimos conectar con el servidor. Revisa tu conexión e inténtalo de nuevo en unos segundos.'
+      texto: 'El servidor tuvo un problema al terminar el registro. Inténtalo de nuevo; si ya te registraste, inicia sesión.',
+      enlaceLogin: true,
+      ambiguo: true
     };
   }
 
@@ -191,7 +201,8 @@ const traducirError = (err) => {
     campo: 'general',
     titulo: 'Puede que tu cuenta ya esté creada.',
     texto: 'Algo falló justo después de registrarte. Intenta iniciar sesión con tu correo y contraseña.',
-    enlaceLogin: true
+    enlaceLogin: true,
+    ambiguo: true
   };
 };
 
@@ -233,7 +244,7 @@ export const RegisterPage = () => {
   const [mensajeExito, setMensajeExito] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { register } = useAuth();
+  const { register, login } = useAuth();
   const navigate = useNavigate();
 
   // Marca el campo con problema, muestra el mensaje y le da el foco
@@ -249,6 +260,35 @@ export const RegisterPage = () => {
     if (error.texto) {
       setError(SIN_ERROR);
     }
+  };
+
+  const finalizarExito = () => {
+    setMensajeExito('¡Cuenta creada exitosamente! Redirigiendo...');
+
+    setTimeout(() => {
+      navigate('/hoy');
+    }, 1500);
+  };
+
+  // Comprueba si la cuenta quedó creada intentando iniciar sesión con los datos del formulario.
+  // Se prueban las dos formas habituales de llamar a login (argumentos sueltos u objeto).
+  const intentarLogin = async () => {
+    if (typeof login !== 'function') return false;
+
+    const correo = email.trim();
+    const intentos = [() => login(correo, password), () => login({ email: correo, password })];
+
+    for (const intento of intentos) {
+      try {
+        const res = await intento();
+        const fallo = res === false || res?.success === false || res?.ok === false;
+        if (!fallo) return true;
+      } catch {
+        // este intento no funcionó; se prueba el siguiente
+      }
+    }
+
+    return false;
   };
 
   const handleSubmit = async (e) => {
@@ -298,20 +338,23 @@ export const RegisterPage = () => {
         password_confirmation: confirmPassword
       });
 
-      setMensajeExito('¡Cuenta creada exitosamente! Redirigiendo...');
-
-      setTimeout(() => {
-        navigate('/hoy');
-      }, 1500);
+      finalizarExito();
     } catch (err) {
       // Se deja el error real en consola para poder ver qué paso falló
       console.error('Error de registro:', err, err?.data ?? err?.response?.data);
 
-      const { campo, texto, titulo, enlaceLogin } = traducirError(err);
+      const traducido = traducirError(err);
 
-      fallar(campo, texto, {
-        titulo: titulo || '',
-        enlaceLogin: Boolean(enlaceLogin)
+      // El servidor falló (500 / HTML) pero pudo haber creado la cuenta:
+      // se comprueba iniciando sesión con los mismos datos.
+      if (traducido.ambiguo && (await intentarLogin())) {
+        finalizarExito();
+        return;
+      }
+
+      fallar(traducido.campo, traducido.texto, {
+        titulo: traducido.titulo || '',
+        enlaceLogin: Boolean(traducido.enlaceLogin)
       });
     } finally {
       setLoading(false);

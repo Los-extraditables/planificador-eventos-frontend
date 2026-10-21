@@ -514,7 +514,7 @@ const CrearEvento = ({ onEventoCreado }) => {
           >
             <span className="col-span-6">NOMBRE DE LA SUBTAREA</span>
             <span className="col-span-3">PLAZO</span>
-            <span className="col-span-2">HORAS EST.</span>
+            <span className="col-span-2">HORAS ESTIMADAS.</span>
             <span className="col-span-1"></span>
           </div>
 
