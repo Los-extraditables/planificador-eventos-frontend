@@ -26,6 +26,9 @@ const MS_SALIDA = 320; // fase 1: la tarjeta actual sale
 const MS_ENTRADA = 700; // fase 4: la tarjeta nueva termina de entrar
 const MS_APERTURA = 1100;
 
+// Ruta a la que se vuelve al terminar u omitir el tour.
+const RUTA_FINAL = '/hoy';
+
 // Tiempo máximo esperando a que el layout (Navbar) exista antes del arranque automático.
 const MS_ESPERA_LAYOUT = 20000;
 
@@ -444,6 +447,11 @@ export default function OnboardingTour({ cuentaNueva = false, onTerminar }) {
 
       limpiarVisual();
       restaurarMenu();
+
+      // Al terminar u omitir, el usuario queda en la ventana Hoy.
+      if (rutaRef.current !== RUTA_FINAL) {
+        navigateRef.current(RUTA_FINAL);
+      }
 
       // Avisa a la app: ahí se hace el PATCH (solo si no fue repetición manual).
       try {
