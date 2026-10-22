@@ -656,23 +656,20 @@ const SeccionGestiones = ({
 };
 
 const Metrica = ({ icono: Icono, fondo, valor, etiqueta }) => (
-  <div
-    className={`${UI.tarjeta} flex flex-row sm:flex-col items-center sm:items-stretch justify-between gap-3 sm:gap-0 sm:space-y-4 min-w-0`}
-  >
-    <div className="flex items-center gap-3 min-w-0">
-      <div
-        className={`w-10 h-10 rounded-xl text-white flex items-center justify-center flex-shrink-0 shadow-sm ${fondo}`}
-      >
-        <Icono className="w-5 h-5" aria-hidden="true" />
-      </div>
-
-      <span className="text-xs font-semibold text-slate-600">
-        {etiqueta}
-      </span>
+  <div className={`${UI.tarjeta} flex items-center gap-4 min-w-0`}>
+    <div
+      className={`w-12 h-12 rounded-xl text-white flex items-center justify-center flex-shrink-0 shadow-sm ${fondo}`}
+    >
+      <Icono className="w-6 h-6" aria-hidden="true" />
     </div>
 
-    <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight flex-shrink-0">
-      {valor}
+    <div className="min-w-0">
+      <div className="text-3xl font-extrabold text-slate-900 leading-none tabular-nums">
+        {valor}
+      </div>
+      <span className="block mt-1.5 text-xs font-semibold text-slate-600">
+        {etiqueta}
+      </span>
     </div>
   </div>
 );
@@ -786,6 +783,42 @@ const TarjetaGestion = ({
         }
       />
     </li>
+  );
+};
+
+/* ===================== Ayuda de prioridad ===================== */
+const AyudaPrioridad = () => {
+  const [abierto, setAbierto] = useState(false);
+
+  return (
+    <div className="relative flex-shrink-0">
+      <button
+        type="button"
+        onClick={() => setAbierto((v) => !v)}
+        onMouseEnter={() => setAbierto(true)}
+        onMouseLeave={() => setAbierto(false)}
+        onBlur={() => setAbierto(false)}
+        onKeyDown={(e) => e.key === 'Escape' && setAbierto(false)}
+        aria-expanded={abierto}
+        aria-controls="ayuda-prioridad"
+        aria-label="¿Cómo se calcula la prioridad?"
+        className={`w-6 h-6 rounded-full border border-[#0D6E72] font-bold text-xs flex items-center justify-center cursor-pointer ${FOCO}`}
+      >
+        ?
+      </button>
+
+      {abierto && (
+        <div
+          id="ayuda-prioridad"
+          role="tooltip"
+          className="absolute left-0 top-full mt-2 w-72 max-w-[calc(100vw-3rem)] z-20 bg-slate-900 text-white text-xs leading-relaxed rounded-xl p-3 shadow-xl"
+        >
+          Dentro de cada grupo van primero las de fecha más antigua; si
+          coinciden, la que toma menos horas; si aún empatan, las pospuestas y
+          luego las del evento con fecha límite más cercana.
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -1234,7 +1267,7 @@ const Hoy = ({ onCrearEvento, setPestanaActiva }) => {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Metrica
                 icono={Calendar}
                 fondo="bg-cyan-700"
@@ -1284,20 +1317,12 @@ const Hoy = ({ onCrearEvento, setPestanaActiva }) => {
                 Subtareas de hoy
               </h2>
 
-              <div className="bg-[#E6F7F8] border border-[#A7ECEE] rounded-2xl p-3 sm:p-4 flex items-start gap-3 text-[#0D6E72] text-sm leading-relaxed">
-                <div
-                  aria-hidden="true"
-                  className="w-5 h-5 rounded-full border border-[#0D6E72] flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5"
-                >
-                  ?
-                </div>
+              <div className="bg-[#E6F7F8] border border-[#A7ECEE] rounded-2xl px-3 py-2.5 sm:px-4 flex items-center gap-3 text-[#0D6E72] text-sm">
+                <AyudaPrioridad />
 
                 <p className="min-w-0">
-                  Tus subtareas se agrupan por urgencia y cada una tiene su
-                  número de prioridad. Dentro de cada grupo van primero las
-                  de fecha más antigua; si coinciden, la que toma menos
-                  horas; si aún empatan, las pospuestas y luego las del
-                  evento con fecha límite más cercana.
+                  Tus subtareas se ordenan por urgencia; el número indica tu
+                  prioridad.
                 </p>
               </div>
             </div>
@@ -1307,7 +1332,7 @@ const Hoy = ({ onCrearEvento, setPestanaActiva }) => {
                 No hay subtareas que coincidan con este filtro.
               </div>
             ) : (
-              <div className="space-y-4 sm:space-y-6">
+              <div className="space-y-6">
                 <SeccionGestiones
                   tipo="atrasadas"
                   gestiones={gestionesAtrasadas}
