@@ -1,5 +1,5 @@
 import { AlertCircle, CheckCircle2, Eye, EyeOff, Lock, Mail, User } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -50,7 +50,7 @@ const recolectarTexto = (err) => {
 
 const tiene = (texto, palabras) => palabras.some((p) => texto.includes(p));
 
-// Devuelve { campo, texto, titulo, enlaceLogin }
+// Devuelve { campo, texto, titulo, enlaceLogin, ambiguo }
 const traducirError = (err) => {
   const t = recolectarTexto(err);
   const habla = (campo) => tiene(t, campo);
@@ -83,6 +83,50 @@ const traducirError = (err) => {
       texto: 'El servidor tuvo un problema al terminar el registro. Inténtalo de nuevo; si ya te registraste, inicia sesión.',
       enlaceLogin: true,
       ambiguo: true
+    };
+  }
+
+  // Contraseña (se revisa antes que el correo: los mensajes de contraseña
+  // como "too similar to the email" no deben confundirse con errores de correo)
+  if (habla(['password', 'contraseña', 'contrasena'])) {
+    if (tiene(t, ['too common', 'muy común', 'muy comun', 'common password'])) {
+      return {
+        campo: 'password',
+        texto: 'Esa contraseña es muy común. Elige una más difícil de adivinar.'
+      };
+    }
+
+    if (tiene(t, ['entirely numeric', 'solo números', 'solo numeros', 'only numbers', 'numeric'])) {
+      return {
+        campo: 'password',
+        texto: 'La contraseña no puede tener solo números. Agrega letras.'
+      };
+    }
+
+    if (tiene(t, ['too short', 'at least', 'muy corta', 'mínimo', 'minimo', 'min_length', 'short'])) {
+      return {
+        campo: 'password',
+        texto: 'La contraseña es muy corta. Usa al menos 6 caracteres.'
+      };
+    }
+
+    if (tiene(t, ['too similar', 'similar', 'se parece'])) {
+      return {
+        campo: 'password',
+        texto: 'La contraseña se parece demasiado a tu nombre o correo. Elige otra.'
+      };
+    }
+
+    if (tiene(t, ['match', 'coinciden', 'confirmation', 'confirmación', 'confirmacion'])) {
+      return {
+        campo: 'confirm',
+        texto: 'Las contraseñas no coinciden.'
+      };
+    }
+
+    return {
+      campo: 'password',
+      texto: 'Esa contraseña no es válida. Prueba con una más larga y combinada.'
     };
   }
 
@@ -143,49 +187,6 @@ const traducirError = (err) => {
     };
   }
 
-  // Contraseña
-  if (habla(['password', 'contraseña', 'contrasena'])) {
-    if (tiene(t, ['too common', 'muy común', 'muy comun', 'common password'])) {
-      return {
-        campo: 'password',
-        texto: 'Esa contraseña es muy común. Elige una más difícil de adivinar.'
-      };
-    }
-
-    if (tiene(t, ['entirely numeric', 'solo números', 'solo numeros', 'only numbers', 'numeric'])) {
-      return {
-        campo: 'password',
-        texto: 'La contraseña no puede tener solo números. Agrega letras.'
-      };
-    }
-
-    if (tiene(t, ['too short', 'at least', 'muy corta', 'mínimo', 'minimo', 'min_length', 'short'])) {
-      return {
-        campo: 'password',
-        texto: 'La contraseña es muy corta. Usa al menos 6 caracteres.'
-      };
-    }
-
-    if (tiene(t, ['too similar', 'similar', 'se parece'])) {
-      return {
-        campo: 'password',
-        texto: 'La contraseña se parece demasiado a tu nombre o correo. Elige otra.'
-      };
-    }
-
-    if (tiene(t, ['match', 'coinciden', 'confirmation', 'confirmación', 'confirmacion'])) {
-      return {
-        campo: 'confirm',
-        texto: 'Las contraseñas no coinciden.'
-      };
-    }
-
-    return {
-      campo: 'password',
-      texto: 'Esa contraseña no es válida. Prueba con una más larga y combinada.'
-    };
-  }
-
   // Nombre
   if (habla(['nombre_completo', 'nombre', 'name'])) {
     return {
@@ -195,8 +196,7 @@ const traducirError = (err) => {
   }
 
   // Error sin información útil: el backend puede haber creado la cuenta y haber fallado
-  // en un paso posterior (inicio de sesión automático, lectura de la respuesta, etc.).
-  // Por eso NO se afirma que la cuenta no se creó: se invita a iniciar sesión.
+  // en un paso posterior. Por eso NO se afirma que la cuenta no se creó: se invita a iniciar sesión.
   return {
     campo: 'general',
     titulo: 'Puede que tu cuenta ya esté creada.',
@@ -247,6 +247,10 @@ export const RegisterPage = () => {
   const { register, login } = useAuth();
   const navigate = useNavigate();
 
+  // Para cancelar la redirección si el componente se desmonta antes de tiempo
+  const temporizador = useRef(null);
+  useEffect(() => () => clearTimeout(temporizador.current), []);
+
   // Marca el campo con problema, muestra el mensaje y le da el foco
   const fallar = (campo, texto, extra = {}) => {
     setError({ ...SIN_ERROR, campo, texto, ...extra });
@@ -262,17 +266,16 @@ export const RegisterPage = () => {
     }
   };
 
-  const finalizarExito = () => {
-    setMensajeExito('¡Cuenta creada exitosamente! Redirigiendo...');
-
-    setTimeout(() => {
-      navigate('/hoy');
-    }, 1500);
+  // Redirige a la app (ya con sesión iniciada) o al login si el autologin no fue posible
+  const redirigir = (ruta, mensaje) => {
+    setMensajeExito(mensaje);
+    temporizador.current = setTimeout(() => navigate(ruta, { replace: true }), 1200);
   };
 
-  // Comprueba si la cuenta quedó creada intentando iniciar sesión con los datos del formulario.
+  // Inicia sesión automáticamente con los datos del formulario.
   // Se prueban las dos formas habituales de llamar a login (argumentos sueltos u objeto).
-  const intentarLogin = async () => {
+  // Devuelve true si la sesión quedó iniciada.
+  const iniciarSesionAuto = async () => {
     if (typeof login !== 'function') return false;
 
     const correo = email.trim();
@@ -337,8 +340,6 @@ export const RegisterPage = () => {
         password,
         password_confirmation: confirmPassword
       });
-
-      finalizarExito();
     } catch (err) {
       // Se deja el error real en consola para poder ver qué paso falló
       console.error('Error de registro:', err, err?.data ?? err?.response?.data);
@@ -347,18 +348,27 @@ export const RegisterPage = () => {
 
       // El servidor falló (500 / HTML) pero pudo haber creado la cuenta:
       // se comprueba iniciando sesión con los mismos datos.
-      if (traducido.ambiguo && (await intentarLogin())) {
-        finalizarExito();
-        return;
+      if (traducido.ambiguo && (await iniciarSesionAuto())) {
+        redirigir('/hoy', '¡Cuenta creada exitosamente! Redirigiendo...');
+        return; // loading se mantiene activo hasta la redirección
       }
 
       fallar(traducido.campo, traducido.texto, {
         titulo: traducido.titulo || '',
         enlaceLogin: Boolean(traducido.enlaceLogin)
       });
-    } finally {
       setLoading(false);
+      return;
     }
+
+    // La cuenta se creó: inicio de sesión automático con los mismos datos
+    if (await iniciarSesionAuto()) {
+      redirigir('/hoy', '¡Cuenta creada exitosamente! Iniciando sesión...');
+    } else {
+      // Cuenta creada pero el autologin falló: se lleva al usuario al login
+      redirigir('/login', 'Cuenta creada. Inicia sesión para continuar...');
+    }
+    // loading se mantiene activo para evitar reenvíos mientras se redirige
   };
 
   const errorEn = (campo) => (error.campo === campo ? error : SIN_ERROR);
