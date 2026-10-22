@@ -1,32 +1,87 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
 const AuthContext = createContext(null);
+
+// tour_visto NUNCA se guarda en localStorage: la fuente de verdad es el backend.
+// Así un valor viejo en caché no puede ocultar ni relanzar el tour por error.
+const guardarUsuarioLocal = (usuario) => {
+  try {
+    // eslint-disable-next-line no-unused-vars
+    const { tour_visto, tour_visto_en, ...resto } = usuario || {};
+    localStorage.setItem('user', JSON.stringify(resto));
+  } catch (error) {
+    console.error('No se pudo guardar el usuario en localStorage:', error);
+  }
+};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const rawApiUrl = import.meta.env.VITE_API_URL || 'https://planificador-eventos-backend.onrender.com/api';
+  const rawApiUrl =
+    import.meta.env.VITE_API_URL || 'https://planificador-eventos-backend.onrender.com/api';
   const API_URL = rawApiUrl.endsWith('/') ? rawApiUrl.slice(0, -1) : rawApiUrl;
 
-  // Al cargar la página, comprueba si el usuario ya tenía sesión iniciada
+  // Salir: limpia sesión local y estado
+  const logout = useCallback(() => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user');
+    setToken(null);
+    setUser(null);
+  }, []);
+
+  // Pide el perfil real al backend (incluye tour_visto) y lo mezcla en `user`.
+  // Devuelve el perfil, o null si falló (sin romper la sesión salvo que el token sea inválido).
+  const cargarPerfil = useCallback(
+    async (tokenActual) => {
+      if (!tokenActual) return null;
+
+      try {
+        const response = await fetch(`${API_URL}/users/profile/`, {
+          headers: { Authorization: `Bearer ${tokenActual}` }
+        });
+
+        if (response.status === 401) {
+          logout(); // token vencido o inválido
+          return null;
+        }
+        if (!response.ok) return null;
+
+        const perfil = await response.json();
+        setUser((prev) => {
+          const combinado = { ...(prev || {}), ...perfil };
+          guardarUsuarioLocal(combinado);
+          return combinado;
+        });
+        return perfil;
+      } catch (error) {
+        console.error('No se pudo cargar el perfil:', error);
+        return null;
+      }
+    },
+    [API_URL, logout]
+  );
+
+  // Al cargar la página: restaura la sesión y SIEMPRE refresca el perfil desde el backend
   useEffect(() => {
     const savedToken = localStorage.getItem('token');
     const savedUser = localStorage.getItem('user');
 
-    if (savedToken && savedUser) {
+    if (savedToken) {
       setToken(savedToken);
       try {
-        setUser(JSON.parse(savedUser));
+        setUser(savedUser ? JSON.parse(savedUser) : null);
       } catch {
         setUser(null);
       }
+      cargarPerfil(savedToken);
     }
     setLoading(false);
-  }, []);
+  }, [cargarPerfil]);
 
-  // Función para iniciar sesión 
+  // Iniciar sesión
   const login = async (username, password) => {
     const response = await fetch(`${API_URL}/login/`, {
       method: 'POST',
@@ -36,15 +91,21 @@ export const AuthProvider = ({ children }) => {
 
     const textResponse = await response.text();
     let data;
-    
+
     try {
       data = textResponse ? JSON.parse(textResponse) : {};
-    } catch (e) {
-      throw new Error(`Error del servidor (${response.status}): El servidor no devolvió una respuesta válida.`);
+    } catch {
+      throw new Error(
+        `Error del servidor (${response.status}): El servidor no devolvió una respuesta válida.`
+      );
     }
 
     if (!response.ok) {
-      const errorMsg = data.detail || data.non_field_errors?.[0] || Object.values(data)[0]?.[0] || 'Credenciales inválidas.';
+      const errorMsg =
+        data.detail ||
+        data.non_field_errors?.[0] ||
+        Object.values(data)[0]?.[0] ||
+        'Credenciales inválidas.';
       throw new Error(errorMsg);
     }
 
@@ -53,23 +114,25 @@ export const AuthProvider = ({ children }) => {
       throw new Error('No se recibió el token de acceso.');
     }
 
-    // 1. Guardamos de inmediato en el almacenamiento local
     localStorage.setItem('token', accessToken);
     if (data.refresh) {
       localStorage.setItem('refresh_token', data.refresh);
     }
 
-    const usuarioTemporal = { email: username, username: username };
-    localStorage.setItem('user', JSON.stringify(usuarioTemporal));
+    // Usuario provisional mientras llega el perfil real
+    const usuarioTemporal = { email: username, username };
+    guardarUsuarioLocal(usuarioTemporal);
 
-    // 2. ACTUALIZAMOS LOS ESTADOS DE REACT DE FORMA SÍNCRONA
     setToken(accessToken);
     setUser(usuarioTemporal);
+
+    // Perfil real (con tour_visto). Se espera para que la app ya lo tenga al navegar.
+    await cargarPerfil(accessToken);
 
     return data;
   };
 
-  // Función para registrar usuario directamente con fetch
+  // Registrar usuario
   const register = async (userData) => {
     const response = await fetch(`${API_URL}/register/`, {
       method: 'POST',
@@ -84,65 +147,105 @@ export const AuthProvider = ({ children }) => {
 
     const data = await response.json();
     if (!response.ok) {
-      // Formatear errores de Django si vienen en objeto
-      const errorMsg = typeof data === 'object' 
-        ? Object.entries(data).map(([k, v]) => `${k}: ${v}`).join(' | ') 
-        : 'Error al crear la cuenta.';
+      const errorMsg =
+        typeof data === 'object'
+          ? Object.entries(data)
+              .map(([k, v]) => `${k}: ${v}`)
+              .join(' | ')
+          : 'Error al crear la cuenta.';
       throw new Error(errorMsg);
     }
 
-    // Si el backend devuelve token y usuario al registrar
-    if (data.token) {
-      setToken(data.token);
-      localStorage.setItem('token', data.token);
-    }
-    
-    const usuarioRegistrado = data.user || data;
-    if (usuarioRegistrado) {
+    // Si el backend devuelve token al registrar, se inicia sesión y se carga el perfil real.
+    // Si no lo devuelve, el login posterior se encarga de cargar el perfil.
+    const nuevoToken = data.access || data.token;
+    if (nuevoToken) {
+      localStorage.setItem('token', nuevoToken);
+      if (data.refresh) localStorage.setItem('refresh_token', data.refresh);
+      setToken(nuevoToken);
+
+      const usuarioRegistrado = data.user || {};
       setUser(usuarioRegistrado);
-      localStorage.setItem('user', JSON.stringify(usuarioRegistrado));
+      guardarUsuarioLocal(usuarioRegistrado);
+
+      await cargarPerfil(nuevoToken);
     }
 
     return data;
   };
 
-  // Función para salir
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setToken(null);
-    setUser(null);
-  };
+  // Marca el tour como visto en el backend (solo para el tour automático)
+  const marcarTourVisto = useCallback(async () => {
+    // Optimista: evita que el tour se relance mientras llega el PATCH
+    setUser((prev) => (prev ? { ...prev, tour_visto: true } : prev));
 
-  // Obtener el nombre para mostrar
+    const tokenActual = localStorage.getItem('token');
+    if (!tokenActual) return;
+
+    try {
+      const response = await fetch(`${API_URL}/usuarios/me/tour/`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${tokenActual}`
+        },
+        body: JSON.stringify({ tour_visto: true })
+      });
+
+      if (response.status === 401) {
+        logout();
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      setUser((prev) =>
+        prev
+          ? { ...prev, tour_visto: data.tour_visto ?? true, tour_visto_en: data.tour_visto_en }
+          : prev
+      );
+    } catch (error) {
+      // Se queda en true localmente; en la próxima carga el backend decide.
+      console.error('No se pudo guardar el estado del tour:', error);
+    }
+  }, [API_URL, logout]);
+
+  // Nombre para mostrar
   const getUserDisplayName = () => {
     if (!user) return '';
-    
+
     if (user.first_name || user.last_name) {
       return `${user.first_name || ''} ${user.last_name || ''}`.trim();
     }
     if (user.nombre_completo) return user.nombre_completo;
     if (user.fullName) return user.fullName;
     if (user.name) return user.name;
-    
+
     if (user.username && !user.username.includes('@')) {
       return user.username;
     }
-    
+
     return user.email || user.username || 'Usuario';
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      token, 
-      login, 
-      register, 
-      logout, 
-      isAuthenticated: !!token, 
-      loading,
-      userDisplayName: getUserDisplayName()
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        setUser,
+        token,
+        login,
+        register,
+        logout,
+        cargarPerfil,
+        marcarTourVisto,
+        isAuthenticated: !!token,
+        loading,
+        userDisplayName: getUserDisplayName()
+      }}
+    >
       {!loading && children}
     </AuthContext.Provider>
   );

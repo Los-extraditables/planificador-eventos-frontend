@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import OnboardingTour from '../components/OnboardingTour';
+import { useAuth } from '../context/AuthContext';
 
 // Título de la pestaña según la ruta.
 const TITULOS = [
@@ -22,8 +23,17 @@ const tituloDeRuta = (pathname) => {
 
 export const MainLayout = () => {
   const { pathname } = useLocation();
+  const { user, loading, marcarTourVisto } = useAuth();
   const mainRef = useRef(null);
   const primeraCarga = useRef(true);
+
+  // El tour sale solo cuando el perfil ya cargó y el backend dice explícitamente false.
+  const cuentaNueva = !loading && user?.tour_visto === false;
+
+  const alTerminarTour = (_motivo, { manual } = {}) => {
+    if (manual) return; // repetido desde "Ayuda": no toca el backend
+    marcarTourVisto();
+  };
 
   // Actualiza el título y mueve el foco al contenido al cambiar de ruta.
   useEffect(() => {
@@ -33,6 +43,9 @@ export const MainLayout = () => {
       primeraCarga.current = false;
       return;
     }
+
+    // Durante el tour, el foco lo maneja la tarjeta del recorrido.
+    if (document.body.classList.contains('evora-tour-ocupado')) return;
 
     mainRef.current?.focus();
   }, [pathname]);
@@ -57,7 +70,7 @@ export const MainLayout = () => {
       <Navbar />
 
       {/* Tutorial interactivo: se monta una sola vez en el diseño principal */}
-      <OnboardingTour />
+      <OnboardingTour cuentaNueva={cuentaNueva} onTerminar={alTerminarTour} />
 
       <main
         id="contenido-principal"

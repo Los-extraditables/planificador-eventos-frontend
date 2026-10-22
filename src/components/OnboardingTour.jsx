@@ -26,6 +26,9 @@ const MS_SALIDA = 320; // fase 1: la tarjeta actual sale
 const MS_ENTRADA = 700; // fase 4: la tarjeta nueva termina de entrar
 const MS_APERTURA = 1100;
 
+// Tiempo máximo esperando a que el layout (Navbar) exista antes del arranque automático.
+const MS_ESPERA_LAYOUT = 20000;
+
 // Evita que el tour AUTOMÁTICO se repita dentro de la misma sesión
 // (por ejemplo, si el componente se vuelve a montar). No usa almacenamiento.
 let autoMostrado = false;
@@ -329,7 +332,8 @@ const construirTarjeta = (
 /*  API pública                                                        */
 /* ------------------------------------------------------------------ */
 
-// Lanza el tour cuando quieras (p. ej. desde un botón de ayuda).
+// Lanza el tour cuando quieras (p. ej. desde el botón "Ayuda").
+// Es puramente visual: no toca el backend ni localStorage.
 // <OnboardingTour /> debe estar montado en el layout principal.
 export const reiniciarTour = () => {
   window.dispatchEvent(new Event(TOUR_EVENT));
@@ -341,10 +345,11 @@ export const reiniciarTour = () => {
 
 /**
  * Props:
- *   cuentaNueva  boolean  true → el tour sale solo (cuenta recién creada).
- *   onTerminar   (motivo: 'completado' | 'omitido') => void
- *                Úsalo para marcar en tu backend/estado que el tour ya se vio,
- *                de modo que cuentaNueva deje de ser true.
+ *   cuentaNueva  boolean  true SOLO cuando el perfil ya cargó y el backend
+ *                dice explícitamente tour_visto === false.
+ *   onTerminar   (motivo: 'completado' | 'omitido', { manual: boolean }) => void
+ *                manual = true cuando el usuario repitió el tour con el botón
+ *                Ayuda: en ese caso NO hay que hacer PATCH al backend.
  */
 export default function OnboardingTour({ cuentaNueva = false, onTerminar }) {
   const navigate = useNavigate();
@@ -362,6 +367,7 @@ export default function OnboardingTour({ cuentaNueva = false, onTerminar }) {
   const progresoPrevRef = useRef(-1);
   const direccionRef = useRef('inicio'); // 'inicio' | 'adelante' | 'atras'
   const ocupadoRef = useRef(false); // evita navegaciones simultáneas
+  const manualRef = useRef(false); // true si el usuario lo pidió con "Ayuda"
   const cerrandoRef = useRef(false);
   const menuAbiertoRef = useRef(false);
   const temporizadoresRef = useRef(new Set());
@@ -439,9 +445,9 @@ export default function OnboardingTour({ cuentaNueva = false, onTerminar }) {
       limpiarVisual();
       restaurarMenu();
 
-      // Avisa a la app: ahí marcas el tour como visto (backend o estado).
+      // Avisa a la app: ahí se hace el PATCH (solo si no fue repetición manual).
       try {
-        onTerminarRef.current?.(motivo);
+        onTerminarRef.current?.(motivo, { manual: manualRef.current });
       } catch (error) {
         console.error('Tour Evora: error en onTerminar.', error);
       }
@@ -567,12 +573,13 @@ export default function OnboardingTour({ cuentaNueva = false, onTerminar }) {
 
   /* ---- Inicio ---- */
   // forzar = true  → lo pidió el usuario con el botón (siempre se muestra).
-  // forzar = false → arranque automático de cuenta nueva (una vez por sesión).
+  // forzar = false → arranque automático (tour_visto === false, una vez por sesión).
   const iniciar = useCallback(
     async ({ forzar = false } = {}) => {
       if (!montadoRef.current || driverRef.current) return;
       if (!forzar && autoMostrado) return;
 
+      manualRef.current = forzar;
       const operacion = ++operacionRef.current;
       const vigente = () => montadoRef.current && operacionRef.current === operacion;
       const fx = fxRef.current;
@@ -707,7 +714,7 @@ export default function OnboardingTour({ cuentaNueva = false, onTerminar }) {
 
         // Se marca justo antes de arrancar: así StrictMode (doble montaje)
         // no cancela el primer intento sin haber mostrado nada.
-        autoMostrado = true;
+        if (!forzar) autoMostrado = true;
         instancia.drive(0);
       } catch (error) {
         console.error('Error al iniciar el tour de Evora:', error);
@@ -738,7 +745,7 @@ export default function OnboardingTour({ cuentaNueva = false, onTerminar }) {
     fx.forzarReducido(reducirManual);
     document.documentElement.dataset.evoraMovimiento = fx.reducido() ? 'reducido' : 'completo';
 
-    // Botón "Ver recorrido": se puede repetir siempre que se quiera.
+    // Botón "Ayuda": se puede repetir siempre que se quiera (solo visual).
     const manejarReinicio = () => {
       descartar();
       programar(() => accionesRef.current.iniciar({ forzar: true }), 200);
@@ -764,14 +771,37 @@ export default function OnboardingTour({ cuentaNueva = false, onTerminar }) {
     };
   }, [descartar, programar]);
 
-  /* ---- Arranque automático: SOLO cuentas recién creadas ---- */
+  /* ---- Arranque automático: SOLO si el backend dice tour_visto === false ---- */
   useEffect(() => {
-    if (cuentaNueva) {
-      accionesRef.current.iniciar();
-    } else {
-      // Sin cuenta nueva (sesión cerrada o tour ya visto): se rearma para la próxima.
+    if (!cuentaNueva) {
+      // Tour ya visto o sesión cerrada: se rearma para la próxima cuenta.
       autoMostrado = false;
+      return undefined;
     }
+    if (autoMostrado) return undefined;
+
+    let cancelado = false;
+    let timer = null;
+    const inicio = performance.now();
+
+    // Espera a que el layout (Navbar) esté montado antes de arrancar.
+    const intentar = () => {
+      if (cancelado) return;
+      if (document.getElementById('nav-hoy')) {
+        accionesRef.current.iniciar();
+        return;
+      }
+      if (performance.now() - inicio < MS_ESPERA_LAYOUT) {
+        timer = window.setTimeout(intentar, 250);
+      }
+    };
+
+    timer = window.setTimeout(intentar, 0);
+
+    return () => {
+      cancelado = true;
+      window.clearTimeout(timer);
+    };
   }, [cuentaNueva]);
 
   return null;
