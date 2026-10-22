@@ -1161,8 +1161,14 @@ const Hoy = ({ onCrearEvento, setPestanaActiva }) => {
           )}
         </EncabezadoPagina>
       ) : (
-        // Título solo para lectores de pantalla: la página siempre necesita un h1
-        <h1 className="sr-only">Subtareas</h1>
+        // Estado vacío: sin título visible, pero se conserva la fecha.
+        // El h1 queda oculto para lectores de pantalla (la página siempre necesita uno).
+        <>
+          <h1 className="sr-only">Subtareas</h1>
+          <p className="text-base text-slate-600 font-medium">
+            {fechaHoyTexto}
+          </p>
+        </>
       )}
 
       {primeraCarga && (
