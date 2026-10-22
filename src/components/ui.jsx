@@ -10,7 +10,8 @@ export const FOCO = 'focus-visible:outline-none focus-visible:ring-2 focus-visib
 
 /* ============================ Clases base ============================ */
 export const UI = {
-  // Contenedor de página (mismo ancho, margen y fondo en todas)
+  // Contenedor de página (mismo ancho, margen y fondo en todas).
+  // space-y-6 = 24 px entre bloques: los hijos no deben llevar mb-* ni mt-*.
   pagina: 'p-4 sm:p-6 md:p-8 max-w-6xl mx-auto space-y-6 bg-slate-50/50 min-h-screen text-slate-800 text-left font-sans',
 
   // Texto
@@ -22,8 +23,8 @@ export const UI = {
   ayuda: 'text-xs text-slate-600 font-medium',
   error: 'text-xs text-red-700 mt-2 font-medium',
 
-  // Tarjetas
-  tarjeta: 'bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-sm',
+  // Tarjetas (p-5 en todos los tamaños, igual que el widget de carga)
+  tarjeta: 'bg-white border border-slate-200/90 rounded-2xl p-5 shadow-sm',
   modal: 'bg-white rounded-3xl p-6 sm:p-8 w-full max-w-xl shadow-2xl border border-slate-100 text-left',
 
   // Formularios
@@ -62,6 +63,7 @@ export const UI = {
 /* ============================ Componentes ============================ */
 
 // Encabezado idéntico en todas las pantallas: título + subtítulo a la izquierda, acciones a la derecha.
+// Sin margen propio: la separación con el siguiente bloque la pone el space-y-6 de UI.pagina.
 export const EncabezadoPagina = ({ titulo, subtitulo, children, className = '' }) => (
   <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${className}`}>
     <div className="min-w-0">

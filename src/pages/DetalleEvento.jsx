@@ -237,10 +237,11 @@ const BotonCerrar = ({ onClick }) => (
 );
 
 /* ===================== Etiqueta de pospuestas (igual que en Hoy y Progreso) ===================== */
+// shrink-0: el badge nunca se comprime ni se parte cuando el título de al lado es largo
 const EtiquetaPospuestas = ({ cantidad, texto }) => {
   if (!cantidad && !texto) return null;
   return (
-    <span className="inline-flex items-center bg-amber-100 text-amber-800 border border-amber-200 text-xs leading-4 font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
+    <span className="inline-flex items-center shrink-0 bg-amber-100 text-amber-800 border border-amber-200 text-xs leading-4 font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
       {texto || `${cantidad} ${cantidad === 1 ? 'pospuesta' : 'pospuestas'}`}
     </span>
   );
@@ -264,6 +265,7 @@ const BarraProgreso = ({ completadas, total, pospuestas = 0, titulo, tamano = 'm
           </span>
         </div>
       )}
+      {/* Riel con fondo y borde visibles incluso al 0 % (slate-200 + borde slate-300) */}
       <div
         role="progressbar"
         aria-label={titulo}
@@ -271,7 +273,7 @@ const BarraProgreso = ({ completadas, total, pospuestas = 0, titulo, tamano = 'm
         aria-valuemax={100}
         aria-valuenow={porcentaje}
         aria-valuetext={`${completadas} de ${total} subtareas, ${porcentaje}%`}
-        className={`w-full bg-slate-100 rounded-full overflow-hidden ${ALTURAS[tamano]}`}
+        className={`w-full bg-slate-200 border border-slate-300 rounded-full overflow-hidden ${ALTURAS[tamano]}`}
       >
         <div className="h-full bg-[#7E22CE] rounded-full transition-all duration-500 motion-reduce:transition-none" style={{ width: `${porcentaje}%` }} />
       </div>
@@ -493,6 +495,9 @@ const ModalConfirmarEliminar = ({ titulo, descripcion, eliminando, onConfirmar, 
 /* ================================ Página ================================ */
 const GESTION_VACIA = { descripcion: '', plazo: '', horas_estimadas: '' };
 const MODAL_GESTION_CERRADO = { abierto: false, modo: 'crear', gestionId: null };
+
+// Enlace "Volver a Hoy": mb-2 (8 px) se suma al space-y-6 de la página para separarlo del título
+const ENLACE_VOLVER = `inline-flex items-center gap-1.5 w-fit mb-2 ${UI.btnEnlace} ${FOCO} ${TACTIL}`;
 
 const DetalleEvento = () => {
   const { id: urlId } = useParams();
@@ -835,7 +840,7 @@ const DetalleEvento = () => {
   if (!cargado) {
     return (
       <div className={`${UI.pagina} min-w-0 max-w-full overflow-x-hidden`}>
-        <button type="button" onClick={() => navigate('/hoy')} className={`inline-flex items-center gap-1.5 w-fit ${UI.btnEnlace} ${FOCO} ${TACTIL}`}>
+        <button type="button" onClick={() => navigate('/hoy')} className={ENLACE_VOLVER}>
           <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Volver a Hoy
         </button>
 
@@ -872,7 +877,7 @@ const DetalleEvento = () => {
   if (eventos.length === 0) {
     return (
       <div className={`${UI.pagina} min-w-0 max-w-full overflow-x-hidden`}>
-        <button type="button" onClick={() => navigate('/hoy')} className={`inline-flex items-center gap-1.5 w-fit ${UI.btnEnlace} ${FOCO} ${TACTIL}`}>
+        <button type="button" onClick={() => navigate('/hoy')} className={ENLACE_VOLVER}>
           <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Volver a Hoy
         </button>
 
@@ -971,7 +976,7 @@ const DetalleEvento = () => {
         {mensaje.tipo === 'error' ? mensaje.texto : ''}
       </div>
 
-      <button type="button" onClick={() => navigate('/hoy')} className={`inline-flex items-center gap-1.5 w-fit md:-mb-2 ${UI.btnEnlace} ${FOCO} ${TACTIL}`}>
+      <button type="button" onClick={() => navigate('/hoy')} className={ENLACE_VOLVER}>
         <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Volver a Hoy
       </button>
 
@@ -1024,18 +1029,25 @@ const DetalleEvento = () => {
                   onClick={() => setEventoSeleccionadoId(String(ev.id))}
                   className={`${UI.tarjeta} hover:shadow-md transition-all cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4 group min-w-0`}
                 >
-                  <div className="space-y-1.5 min-w-0">
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                      <h3 className="text-base font-extrabold text-slate-900 group-hover:text-[#7E22CE] transition break-words min-w-0">{ev.nombre}</h3>
+                  {/* Bloque izquierdo: md:flex-1 + min-w-0 hacen que el título largo se recorte en vez de empujar el progreso */}
+                  <div className="space-y-1.5 min-w-0 md:flex-1">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <h3
+                        title={ev.nombre}
+                        className="text-base leading-5 font-extrabold text-slate-900 group-hover:text-[#7E22CE] transition truncate min-w-0"
+                      >
+                        {ev.nombre}
+                      </h3>
                       <EtiquetaPospuestas cantidad={p.pospuestas} />
                     </div>
-                    <p className="text-xs text-slate-600 font-medium">
+                    <p className="text-xs text-slate-600 font-medium truncate">
                       {ev.tipo || ev.categoria || 'Evento'} • Límite: {ev.fecha ? formatearFechaDisplay(ev.fecha) : 'Sin fecha'}
                     </p>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 md:justify-end min-w-0">
-                    <BarraProgreso completadas={p.completadas} total={p.total} titulo={`Progreso de ${ev.nombre}`} ocultarTitulo tamano="sm" className="w-full sm:flex-1 md:flex-none md:w-52" />
+                  {/* Bloque derecho: centrado vertical respecto a la altura de la tarjeta; no se comprime (md:shrink-0) */}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 md:justify-end md:self-center md:shrink-0 min-w-0">
+                    <BarraProgreso completadas={p.completadas} total={p.total} titulo={`Progreso de ${ev.nombre}`} ocultarTitulo tamano="sm" className="w-full sm:flex-1 md:flex-none md:w-52 sm:self-center" />
                     <button
                       type="button"
                       onClick={(e) => {
@@ -1043,7 +1055,7 @@ const DetalleEvento = () => {
                         setEventoSeleccionadoId(String(ev.id));
                       }}
                       aria-label={`Ver detalle de ${ev.nombre}`}
-                      className={`inline-flex items-center justify-center gap-1 text-xs font-bold text-[#7E22CE] bg-purple-50 group-hover:bg-[#7E22CE] group-hover:text-white px-3.5 py-2 rounded-xl transition whitespace-nowrap cursor-pointer w-full sm:w-auto ${TACTIL} ${FOCO}`}
+                      className={`inline-flex items-center justify-center gap-1 text-xs font-bold text-[#7E22CE] bg-purple-50 group-hover:bg-[#7E22CE] group-hover:text-white px-3.5 py-2 rounded-xl transition whitespace-nowrap cursor-pointer w-full sm:w-auto sm:self-center shrink-0 ${TACTIL} ${FOCO}`}
                     >
                       Ver detalle <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
                     </button>

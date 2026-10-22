@@ -14,6 +14,10 @@ const CAMPO = 'w-full min-w-0 !text-base sm:!text-sm';
 // Áreas táctiles de 44px en móvil/tablet
 const TACTIL = 'min-h-[44px] md:min-h-0';
 
+// Alto fijo de los inputs de la fila de subtareas en escritorio (50px = py-3.5 + línea de 20px + borde de UI.input).
+// El mismo alto se usa en la celda de la papelera para que quede centrada con los inputs.
+const ALTO_FILA = 'md:h-[50px]';
+
 // Safari/iOS: el input de fecha ignora el ancho del contenedor y se sale del diálogo mientras conserve su apariencia nativa.
 // appearance-none + min-w-0 lo obliga a respetar el ancho; min-h evita que colapse cuando está vacío.
 const FECHA_IOS = 'appearance-none block min-w-0 max-w-full min-h-[3.25rem] sm:min-h-0 [&::-webkit-date-and-time-value]:text-left';
@@ -333,10 +337,10 @@ const CrearEvento = ({ onEventoCreado }) => {
         subtitulo="Registra los datos generales del evento y añade sus subtareas."
       />
 
-      <form onSubmit={handleSubmit} noValidate aria-busy={cargando} className="space-y-4 sm:space-y-6">
+      <form onSubmit={handleSubmit} noValidate aria-busy={cargando} className="space-y-6">
         {/* SECCIÓN 1: DATOS DEL EVENTO */}
         <section aria-labelledby="titulo-datos-evento" className={`${UI.tarjeta} space-y-5 sm:space-y-6 min-w-0`}>
-          <h2 id="titulo-datos-evento" className={UI.h2}>Datos del evento</h2>
+          <h2 id="titulo-datos-evento" className="text-lg font-semibold text-slate-800">Datos del evento</h2>
           <p className="text-xs text-slate-600">
             Los campos marcados con <span aria-hidden="true" className="text-red-700">*</span>
             <span className="sr-only">asterisco</span> son obligatorios.
@@ -447,15 +451,15 @@ const CrearEvento = ({ onEventoCreado }) => {
         {/* SECCIÓN 2: SUBTAREAS INICIALES */}
         <section aria-labelledby="titulo-subtareas" className={`${UI.tarjeta} space-y-5 sm:space-y-6 min-w-0`}>
           <div>
-            <h2 id="titulo-subtareas" className={UI.h2}>Subtareas iniciales</h2>
+            <h2 id="titulo-subtareas" className="text-lg font-semibold text-slate-800">Subtareas iniciales</h2>
             <p className={UI.subtitulo}>
               Define las subtareas necesarias para organizar el evento. Cada plazo debe estar entre hoy y la fecha
               límite del evento.
             </p>
           </div>
 
-          {/* BANNER DE AVISO OPCIONAL */}
-          <div className="bg-purple-50/60 border border-purple-100 text-purple-800 px-4 py-2.5 rounded-xl text-xs font-medium flex items-center gap-2">
+          {/* BANNER DE AVISO OPCIONAL: compacto (py-1.5, sin altura mínima, interlineado ajustado) */}
+          <div className="bg-purple-50/60 border border-purple-100 text-purple-800 px-3 py-1.5 rounded-lg text-xs font-medium leading-snug flex items-center gap-2">
             <Info className="w-3.5 h-3.5 text-purple-700 shrink-0" aria-hidden="true" />
             <span>No es obligatorio crear una subtarea</span>
           </div>
@@ -510,11 +514,11 @@ const CrearEvento = ({ onEventoCreado }) => {
           {/* TÍTULOS DE COLUMNAS: solo en tablet/escritorio (en móvil cada campo muestra su propia etiqueta) */}
           <div
             aria-hidden="true"
-            className="hidden md:grid grid-cols-12 gap-3 px-1 text-slate-600 text-xs font-bold uppercase tracking-wider"
+            className="hidden md:grid grid-cols-12 gap-3 text-slate-600 text-xs font-bold uppercase tracking-wider"
           >
             <span className="col-span-6">NOMBRE DE LA SUBTAREA</span>
             <span className="col-span-3">PLAZO</span>
-            <span className="col-span-2">HORAS ESTIMADAS.</span>
+            <span className="col-span-2">HORAS ESTIMADAS</span>
             <span className="col-span-1"></span>
           </div>
 
@@ -537,7 +541,7 @@ const CrearEvento = ({ onEventoCreado }) => {
                     type="text"
                     placeholder="Ej. Confirmar catering"
                     autoComplete="off"
-                    className={`${erroresGestiones[gest.id]?.descripcion ? UI.inputError : UI.input} ${CAMPO} ${FOCO}`}
+                    className={`${erroresGestiones[gest.id]?.descripcion ? UI.inputError : UI.input} ${CAMPO} ${ALTO_FILA} ${FOCO}`}
                     value={gest.descripcion}
                     {...propsSub(gest, 'descripcion', 'subtarea-descripcion')}
                     onChange={(e) => handleGestionChange(gest.id, 'descripcion', e.target.value)}
@@ -554,7 +558,7 @@ const CrearEvento = ({ onEventoCreado }) => {
                     type="date"
                     min={hoyStr}
                     max={formEvento.fecha || undefined}
-                    className={`${erroresGestiones[gest.id]?.plazo ? UI.inputError : UI.input} ${CAMPO} ${FECHA_IOS} ${FOCO}`}
+                    className={`${erroresGestiones[gest.id]?.plazo ? UI.inputError : UI.input} ${CAMPO} ${FECHA_IOS} ${ALTO_FILA} ${FOCO}`}
                     value={gest.plazo}
                     {...propsSub(gest, 'plazo', 'subtarea-plazo')}
                     onChange={(e) => handleGestionChange(gest.id, 'plazo', e.target.value)}
@@ -574,7 +578,7 @@ const CrearEvento = ({ onEventoCreado }) => {
                     max={limiteGlobal > 0 ? limiteGlobal : undefined}
                     inputMode="decimal"
                     placeholder="Ej. 2.5"
-                    className={`${erroresGestiones[gest.id]?.horas ? UI.inputError : UI.input} ${CAMPO} ${FOCO}`}
+                    className={`${erroresGestiones[gest.id]?.horas ? UI.inputError : UI.input} ${CAMPO} ${ALTO_FILA} ${FOCO}`}
                     value={gest.horas_estimadas}
                     {...propsSub(gest, 'horas', 'subtarea-horas')}
                     onChange={(e) => handleGestionChange(gest.id, 'horas_estimadas', e.target.value)}
@@ -582,8 +586,8 @@ const CrearEvento = ({ onEventoCreado }) => {
                   <ErrorSub gest={gest} campo="horas" nombreId="subtarea-horas" />
                 </div>
 
-                {/* Eliminar: en móvil lleva texto visible; en escritorio solo el icono */}
-                <div className="sm:col-span-2 md:col-span-1 flex justify-end md:justify-center md:pt-1.5">
+                {/* Eliminar: en móvil lleva texto visible; en escritorio la celda mide lo mismo que los inputs (h-11) y centra el icono */}
+                <div className={`sm:col-span-2 md:col-span-1 flex items-center justify-end md:justify-center ${ALTO_FILA}`}>
                   <button
                     type="button"
                     onClick={() => handleEliminarSubtarea(gest.id)}
@@ -598,6 +602,7 @@ const CrearEvento = ({ onEventoCreado }) => {
             ))}
           </div>
 
+          {/* El botón ya nace en el borde izquierdo del contenido de la tarjeta, igual que el primer input */}
           <button
             id="btn-agregar-subtarea"
             type="button"
@@ -608,8 +613,8 @@ const CrearEvento = ({ onEventoCreado }) => {
           </button>
         </section>
 
-        {/* BOTONES FINALES: apilados a ancho completo en móvil (acción principal arriba) */}
-        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-3 pt-2">
+        {/* BOTONES FINALES: alineados a la derecha, con 32 px (40 px en sm+) de espacio inferior */}
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-3 pt-2 pb-8 sm:pb-10">
           <button type="button" onClick={limpiarFormulario} className={`${UI.btnSecundario} ${FOCO} w-full sm:w-auto justify-center ${TACTIL}`}>
             Limpiar formulario
           </button>

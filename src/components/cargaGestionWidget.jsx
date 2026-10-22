@@ -19,10 +19,18 @@ export default function CargaGestionWidget({
   const textoHoras = `${horas.toFixed(1)} de ${limite.toFixed(1)} horas`;
   const porcentajeRedondeado = Math.round(porcentaje);
 
+  // Color del relleno: morado normal, ámbar desde 80 % y rojo desde 100 %
+  const colorRelleno =
+    porcentaje >= 100
+      ? 'bg-red-600'
+      : porcentaje >= 80
+        ? 'bg-amber-600'
+        : 'bg-purple-700';
+
   return (
     <section
       aria-labelledby={idTitulo}
-      className={`w-full bg-white rounded-xl p-5 shadow-sm space-y-3 transition-colors duration-300 motion-reduce:transition-none ${
+      className={`w-full bg-white rounded-2xl p-5 shadow-sm space-y-3 transition-colors duration-300 motion-reduce:transition-none ${
         isOverloaded ? 'border border-amber-600' : 'border border-slate-200'
       }`}
     >
@@ -40,7 +48,7 @@ export default function CargaGestionWidget({
         </span>
       </div>
 
-      {/* Riel con borde y relleno de alto contraste (>= 3:1 contra el riel) */}
+      {/* Riel de 12 px con fondo y borde para distinguirlo del fondo blanco */}
       <div
         role="progressbar"
         aria-labelledby={idTitulo}
@@ -48,12 +56,10 @@ export default function CargaGestionWidget({
         aria-valuemax={100}
         aria-valuenow={porcentajeRedondeado}
         aria-valuetext={`${textoHoras}, ${porcentajeRedondeado}% del límite diario${isOverloaded ? ', límite excedido' : ''}`}
-        className="w-full h-3 rounded-full bg-slate-200 border border-slate-300 overflow-hidden"
+        className="h-3 w-full rounded-full bg-slate-200 border border-slate-300 overflow-hidden"
       >
         <div
-          className={`h-full rounded-full transition-all duration-500 motion-reduce:transition-none ${
-            isOverloaded ? 'bg-amber-700' : 'bg-cyan-700'
-          }`}
+          className={`h-full rounded-full transition-all duration-500 motion-reduce:transition-none ${colorRelleno}`}
           style={{ width: `${porcentaje}%` }}
         />
       </div>

@@ -667,7 +667,7 @@ const Metrica = ({ icono: Icono, fondo, valor, etiqueta }) => (
       <div className="text-3xl font-extrabold text-slate-900 leading-none tabular-nums">
         {valor}
       </div>
-      <span className="block mt-1.5 text-xs font-semibold text-slate-600">
+      <span className="block mt-1.5 text-sm font-semibold text-slate-600">
         {etiqueta}
       </span>
     </div>

@@ -145,10 +145,11 @@ const Modal = ({ onCerrar, bloqueado = false, labelledBy, describedBy, role = 'd
 };
 
 /* ===================== Etiqueta de pospuestas (igual que en Hoy y Detalle) ===================== */
+// shrink-0: el badge nunca se comprime ni se parte
 const EtiquetaPospuestas = ({ cantidad, texto }) => {
   if (!cantidad && !texto) return null;
   return (
-    <span className="inline-flex items-center bg-amber-100 text-amber-800 border border-amber-200 text-xs leading-4 font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
+    <span className="inline-flex items-center shrink-0 bg-amber-100 text-amber-800 border border-amber-200 text-xs leading-4 font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
       {texto || `${cantidad} ${cantidad === 1 ? 'pospuesta' : 'pospuestas'}`}
     </span>
   );
@@ -172,6 +173,7 @@ const BarraProgreso = ({ completadas, total, pospuestas = 0, titulo, tamano = 'm
           </span>
         </div>
       )}
+      {/* Riel con fondo y borde visibles incluso al 0 % (slate-200 + borde slate-300) */}
       <div
         role="progressbar"
         aria-label={titulo}
@@ -179,7 +181,7 @@ const BarraProgreso = ({ completadas, total, pospuestas = 0, titulo, tamano = 'm
         aria-valuemax={100}
         aria-valuenow={porcentaje}
         aria-valuetext={`${completadas} de ${total} subtareas, ${porcentaje}%`}
-        className={`w-full bg-slate-100 rounded-full overflow-hidden ${ALTURAS[tamano]}`}
+        className={`w-full bg-slate-200 border border-slate-300 rounded-full overflow-hidden ${ALTURAS[tamano]}`}
       >
         <div className="h-full bg-[#7E22CE] rounded-full transition-all duration-500 motion-reduce:transition-none" style={{ width: `${porcentaje}%` }} />
       </div>
@@ -394,22 +396,22 @@ const Progreso = () => {
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-            <div className={`${UI.tarjeta} flex flex-col justify-between space-y-3 sm:space-y-4 min-w-0`}>
+            <div className={`${UI.tarjeta} flex flex-col space-y-3 sm:space-y-4 min-w-0`}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-cyan-700 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
                   <BarChart3 className="w-5 h-5" aria-hidden="true" />
                 </div>
-                <span className="text-xs font-semibold text-slate-600">Eventos mostrados</span>
+                <span className="text-sm font-semibold text-slate-600">Eventos mostrados</span>
               </div>
               <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{cantidadEventos}</div>
             </div>
 
-            <div className={`${UI.tarjeta} flex flex-col justify-between space-y-3 sm:space-y-4 min-w-0`}>
+            <div className={`${UI.tarjeta} flex flex-col space-y-3 sm:space-y-4 min-w-0`}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
                   <CheckCircle2 className="w-5 h-5" aria-hidden="true" />
                 </div>
-                <span className="text-xs font-semibold text-slate-600">Subtareas completadas</span>
+                <span className="text-sm font-semibold text-slate-600">Subtareas completadas</span>
               </div>
               <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
                 {global.completadas}{' '}
@@ -421,25 +423,24 @@ const Progreso = () => {
               </div>
             </div>
 
-            <div className={`${UI.tarjeta} flex flex-col justify-between space-y-3 sm:space-y-4 min-w-0`}>
+            <div className={`${UI.tarjeta} flex flex-col space-y-3 sm:space-y-4 min-w-0`}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-[#7E22CE] text-white flex items-center justify-center flex-shrink-0 shadow-sm">
                   <TrendingUp className="w-5 h-5" aria-hidden="true" />
                 </div>
-                <span className="text-xs font-semibold text-slate-600">Cumplimiento global</span>
+                <span className="text-sm font-semibold text-slate-600">Cumplimiento global</span>
               </div>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{global.porcentaje}%</div>
-                  <EtiquetaPospuestas cantidad={global.pospuestas} />
-                </div>
-                <BarraProgreso completadas={global.completadas} total={global.total} titulo="Cumplimiento global" tamano="sm" ocultarCabecera />
+              {/* Misma fila de métrica que las otras dos tarjetas (número arriba, a la misma altura); el badge va a la derecha sin alterar la altura de la fila */}
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{global.porcentaje}%</div>
+                <EtiquetaPospuestas cantidad={global.pospuestas} />
               </div>
+              <BarraProgreso completadas={global.completadas} total={global.total} titulo="Cumplimiento global" tamano="sm" ocultarCabecera />
             </div>
           </div>
 
           <section aria-labelledby="foco-fallback" className="flex flex-col gap-4 pt-2">
-            <h2 id="foco-fallback" tabIndex={-1} className={`${UI.h2} focus:outline-none`}>Detalle por evento</h2>
+            <h2 id="foco-fallback" tabIndex={-1} className="text-lg font-semibold text-slate-800 focus:outline-none">Detalle por evento</h2>
 
             {cantidadEventos === 0 ? (
               <div className={`${UI.tarjeta} p-6 sm:p-8 text-center text-slate-600 text-sm`}>
@@ -450,19 +451,30 @@ const Progreso = () => {
             ) : (
               <ul className="flex flex-col gap-3 sm:gap-4">
                 {eventosCalculados.map((evento) => (
-                  <li key={evento.id} className={`${UI.tarjeta} flex flex-col gap-4 hover:shadow-md transition-all min-w-0`}>
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                      <div className="flex flex-col gap-1.5 min-w-0">
-                        <div className="flex items-center gap-2.5 flex-wrap">
-                          <h3 className="text-base font-extrabold text-slate-900 break-words min-w-0">{evento.nombre}</h3>
-                          <span className="inline-flex items-center px-2 py-0.5 bg-[#F3E8FF] text-[#7E22CE] border border-[#E9D5FF] rounded-full text-xs leading-4 font-bold whitespace-nowrap">
-                            <span className="sr-only">Estado: </span>
-                            {evento.estado || 'En preparación'}
-                          </span>
-                          <EtiquetaPospuestas cantidad={evento.progreso.pospuestas} />
-                        </div>
-                        <p className="text-xs text-slate-600 font-medium">{evento.categoria || evento.tipo || 'Social'}</p>
+                  <li key={evento.id} className={`${UI.tarjeta} flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6 hover:shadow-md transition-all min-w-0`}>
+                    {/* Izquierda: título, estado, pospuestas y categoría */}
+                    <div className="flex flex-col gap-1.5 min-w-0 md:flex-1">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <h3 className="text-base leading-5 font-extrabold text-slate-900 break-words min-w-0">{evento.nombre}</h3>
+                        <span className="inline-flex items-center px-2 py-0.5 bg-[#F3E8FF] text-[#7E22CE] border border-[#E9D5FF] rounded-full text-xs leading-4 font-bold whitespace-nowrap">
+                          <span className="sr-only">Estado: </span>
+                          {evento.estado || 'En preparación'}
+                        </span>
+                        <EtiquetaPospuestas cantidad={evento.progreso.pospuestas} />
                       </div>
+                      <p className="text-xs text-slate-600 font-medium">{evento.categoria || evento.tipo || 'Social'}</p>
+                    </div>
+
+                    {/* Derecha (md+): progreso + acciones en una sola fila, centrados verticalmente con la tarjeta.
+                        En móvil se apilan: barra a ancho completo y botones debajo. */}
+                    <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-6 min-w-0 md:shrink-0">
+                      <BarraProgreso
+                        completadas={evento.progreso.completadas}
+                        total={evento.progreso.total}
+                        titulo={`Progreso de ${evento.nombre}`}
+                        ocultarTitulo
+                        className="w-full md:w-60"
+                      />
 
                       {/* En móvil "Ver detalle" ocupa el ancho disponible junto al botón de eliminar */}
                       <div className="flex items-stretch md:items-center gap-2 w-full md:w-auto">
@@ -486,13 +498,6 @@ const Progreso = () => {
                         </button>
                       </div>
                     </div>
-
-                    <BarraProgreso
-                      completadas={evento.progreso.completadas}
-                      total={evento.progreso.total}
-                      titulo={`Progreso de ${evento.nombre}`}
-                      ocultarTitulo
-                    />
                   </li>
                 ))}
               </ul>
