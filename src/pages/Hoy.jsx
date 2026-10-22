@@ -1116,6 +1116,10 @@ const Hoy = ({ onCrearEvento, setPestanaActiva }) => {
   // El filtro solo se muestra cuando ya cargó y existe al menos un evento
   const hayEventos = cargado && eventos.length > 0;
 
+  // El encabezado solo se muestra cuando ya cargó y existe al menos una subtarea
+  // (se usa el total sin filtrar para que el selector no desaparezca con un filtro sin resultados)
+  const hayGestionesTotales = cargado && todasLasGestiones.length > 0;
+
   return (
     <div className={`${UI.pagina} min-w-0 max-w-full overflow-x-hidden`}>
       {mensaje.texto && (
@@ -1132,29 +1136,34 @@ const Hoy = ({ onCrearEvento, setPestanaActiva }) => {
         {mensaje.tipo === 'error' ? mensaje.texto : ''}
       </div>
 
-      <EncabezadoPagina titulo="Hoy" subtitulo={fechaHoyTexto}>
-        {hayEventos && (
-          <div className="w-full sm:w-auto">
-            <div className={`${UI.filtro} w-full sm:w-auto`}>
-              <SlidersHorizontal
-                className="w-4 h-4 text-slate-500 flex-shrink-0"
-                aria-hidden="true"
-              />
+      {hayGestionesTotales ? (
+        <EncabezadoPagina titulo="Subtareas" subtitulo={fechaHoyTexto}>
+          {hayEventos && (
+            <div className="w-full sm:w-auto">
+              <div className={`${UI.filtro} w-full sm:w-auto`}>
+                <SlidersHorizontal
+                  className="w-4 h-4 text-slate-500 flex-shrink-0"
+                  aria-hidden="true"
+                />
 
-              <select
-                value={filtroEstado}
-                onChange={(e) => setFiltroEstado(e.target.value)}
-                aria-label="Filtrar eventos"
-                className={`${UI.filtroSelect} ${FOCO} w-full min-w-0 ${CAMPO_MOVIL} ${TACTIL}`}
-              >
-                <option value="todos">Todos los eventos</option>
-                <option value="en_preparacion">En preparación</option>
-                <option value="completados">Completados</option>
-              </select>
+                <select
+                  value={filtroEstado}
+                  onChange={(e) => setFiltroEstado(e.target.value)}
+                  aria-label="Filtrar eventos"
+                  className={`${UI.filtroSelect} ${FOCO} w-full min-w-0 ${CAMPO_MOVIL} ${TACTIL}`}
+                >
+                  <option value="todos">Todos los eventos</option>
+                  <option value="en_preparacion">En preparación</option>
+                  <option value="completados">Completados</option>
+                </select>
+              </div>
             </div>
-          </div>
-        )}
-      </EncabezadoPagina>
+          )}
+        </EncabezadoPagina>
+      ) : (
+        // Título solo para lectores de pantalla: la página siempre necesita un h1
+        <h1 className="sr-only">Subtareas</h1>
+      )}
 
       {primeraCarga && (
         <div role="status" aria-live="polite">
